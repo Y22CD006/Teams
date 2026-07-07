@@ -52,6 +52,7 @@ model User {
   eventAttendees    EventAttendee[]
   assignedTasks     Task[]            @relation("TaskAssignee")
   createdTasks      Task[]            @relation("TaskCreator")
+  createdEvents     Event[]
   readReceipts      ReadReceipt[]
 }
 

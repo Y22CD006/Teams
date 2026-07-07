@@ -99,7 +99,7 @@ async function main() {
     },
   });
 
-  await prisma.dmMember.createMany({
+  await prisma.dMMember.createMany({
     data: [
       { userId: alice.id, dmId: dm.id },
       { userId: bob.id, dmId: dm.id },
