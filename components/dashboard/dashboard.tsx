@@ -15,7 +15,7 @@ import {
 } from "@/lib/data";
 import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, FileItem, Attachment, UserStatus, User } from "@/lib/types";
 
-export function Dashboard() {
+export function Dashboard({ dbUser }: { dbUser?: any }) {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
@@ -51,7 +51,25 @@ export function Dashboard() {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
 
-  const currentUser: User = CURRENT_USER;
+  const currentUser: User = dbUser ? {
+    id: dbUser.id,
+    name: dbUser.name || dbUser.email?.split("@")[0] || "User",
+    avatar: dbUser.imageUrl ? dbUser.imageUrl.substring(0, 2).toUpperCase() : (dbUser.name ? dbUser.name.substring(0, 2).toUpperCase() : "U"),
+    role: "Member",
+    status: (dbUser.status as UserStatus) || "online",
+    email: dbUser.email,
+    customStatus: dbUser.customStatus || "",
+  } : CURRENT_USER;
+
+  const [showProfileSetup, setShowProfileSetup] = useState(() => {
+    return dbUser ? (!dbUser.firstName || !dbUser.lastName || !dbUser.phoneNumber) : false;
+  });
+  const [setupFirstName, setSetupFirstName] = useState(dbUser?.firstName || "");
+  const [setupMiddleName, setSetupMiddleName] = useState(dbUser?.middleName || "");
+  const [setupLastName, setSetupLastName] = useState(dbUser?.lastName || "");
+  const [setupPhone, setSetupPhone] = useState(dbUser?.phoneNumber || "");
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState("");
 
   const [settingsRole, setSettingsRole] = useState(currentUser.role);
   const [settingsStatusMsg, setSettingsStatusMsg] = useState(currentUser.customStatus || "");
@@ -384,6 +402,37 @@ export function Dashboard() {
     }
   };
 
+  const handleProfileSetupSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setSetupError("");
+    setSetupLoading(true);
+    try {
+      const res = await fetch("/api/user/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          firstName: setupFirstName, 
+          middleName: setupMiddleName, 
+          lastName: setupLastName, 
+          phoneNumber: setupPhone 
+        }),
+      });
+      if (res.ok) {
+        setShowProfileSetup(false);
+        if (typeof window !== "undefined") {
+          window.location.reload();
+        }
+      } else {
+        const data = await res.json();
+        setSetupError(data.error || "Failed to update profile");
+      }
+    } catch (err) {
+      setSetupError("An unexpected error occurred");
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   return (
     <div id="enterprise-workspace-canvas" className="w-full h-screen bg-[#0B0F19] text-white flex overflow-hidden font-sans">
       <SidebarNav
@@ -661,6 +710,102 @@ export function Dashboard() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {showProfileSetup && (
+        <div className="fixed inset-0 bg-[#0B0F19] z-[100] flex items-center justify-center p-4">
+          <form onSubmit={handleProfileSetupSubmit} className="bg-[#111827] border border-[#374151] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="text-center space-y-1">
+              <h1 className="text-2xl font-bold text-white">Complete Your Profile</h1>
+              <p className="text-sm text-gray-400">Please provide your full name and phone number to access the dashboard.</p>
+            </div>
+
+            {setupError && (
+              <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{setupError}</p>
+            )}
+
+            <div className="space-y-1 opacity-60">
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Email (Read-only)</label>
+              <input
+                type="email"
+                value={dbUser?.email || ""}
+                disabled
+                className="w-full bg-[#1F2937] text-gray-400 text-sm rounded-xl px-3 py-2 border border-[#374151] cursor-not-allowed"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">First Name</label>
+              <input
+                type="text"
+                value={setupFirstName}
+                onChange={(e) => setSetupFirstName(e.target.value)}
+                className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                required
+                placeholder="John"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Middle Name (Optional)</label>
+              <input
+                type="text"
+                value={setupMiddleName}
+                onChange={(e) => setSetupMiddleName(e.target.value)}
+                className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                placeholder="M."
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Last Name</label>
+              <input
+                type="text"
+                value={setupLastName}
+                onChange={(e) => setSetupLastName(e.target.value)}
+                className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                required
+                placeholder="Doe"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Phone Number</label>
+              <input
+                type="tel"
+                value={setupPhone}
+                onChange={(e) => setSetupPhone(e.target.value)}
+                className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                required
+                placeholder="+1 (555) 000-0000"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={setupLoading}
+              className="w-full bg-[#6366F1] hover:bg-[#5053e1] disabled:opacity-60 disabled:cursor-not-allowed text-white py-2 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 mt-4"
+            >
+              {setupLoading && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {setupLoading ? "Saving..." : "Enter Workspace"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.href = "/login";
+              }}
+              className="w-full bg-transparent hover:bg-white/5 text-gray-400 hover:text-white py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2"
+            >
+              Sign Out instead
+            </button>
+          </form>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, Calendar, Phone, Folder, Bell, Settings, Sun, Moon } from 'lucide-react';
+import { MessageSquare, Users, Calendar, Phone, Folder, Bell, Settings, Sun, Moon, LogOut } from 'lucide-react';
 import { User } from '@/lib/types';
 
 interface SidebarNavProps {
@@ -13,6 +13,13 @@ interface SidebarNavProps {
 }
 
 export const SidebarNav = ({ activeView, onViewChange, currentUser, onOpenSettings, theme, onToggleTheme }: SidebarNavProps) => {
+  const handleLogout = async () => {
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    if (res.ok) {
+      window.location.href = "/login";
+    }
+  };
+
   const navItems = [
     { id: 'activity', label: 'Activity', icon: Bell, badge: 3 },
     { id: 'chat', label: 'Chat', icon: MessageSquare, badge: 4 },
@@ -122,6 +129,17 @@ export const SidebarNav = ({ activeView, onViewChange, currentUser, onOpenSettin
             </p>
           </div>
         </div>
+
+        <button
+          onClick={handleLogout}
+          className="w-12 h-12 mt-1 rounded-xl flex items-center justify-center text-red-400/70 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 group relative"
+          title="Logout"
+        >
+          <LogOut className="w-5.5 h-5.5 group-hover:-translate-x-0.5 transition-transform duration-200" />
+          <div className="absolute left-16 bg-[#1F2937] border border-red-900/30 text-red-400 text-xs px-2.5 py-1.5 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap font-medium">
+            Logout
+          </div>
+        </button>
       </div>
     </div>
   );
