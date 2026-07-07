@@ -1,8 +1,10 @@
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { Dashboard } from "@/components/dashboard/dashboard";
 
 export default async function Home() {
-  const { userId } = await auth();
-  if (userId) redirect("/teams");
-  redirect("/login");
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  return <Dashboard />;
 }

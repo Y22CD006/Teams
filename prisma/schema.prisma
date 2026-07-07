@@ -38,11 +38,14 @@ model User {
   name         String?
   imageUrl     String?
   bio          String?
+  password     String   @default("")
   timezone     String     @default("UTC")
   status       UserStatus @default(AVAILABLE)
   customStatus String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  sessions          Session[]
 
   teamMemberships   TeamMember[]
   channelMemberships ChannelMember[]
@@ -233,4 +236,16 @@ model ReadReceipt {
   message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([userId, messageId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
 }
