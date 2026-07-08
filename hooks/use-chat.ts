@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Message } from '@/lib/types';
 
@@ -65,24 +65,11 @@ export function useChat(channelId?: string, dmId?: string) {
   }, [channelId, dmId, queryClient, queryKey]);
 
   const sendMessage = async (content: string) => {
-    const res = await fetch('/api/messages', {
+    await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, channelId, dmId }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      const formatted: Message = {
-        id: data.message.id,
-        content: data.message.content,
-        timestamp: data.message.timestamp,
-        senderId: data.message.senderId,
-        senderName: data.message.senderName,
-        senderAvatar: data.message.senderAvatar || data.message.senderName.substring(0, 2).toUpperCase(),
-        reactions: [],
-      };
-      queryClient.setQueryData(queryKey, (old: Message[] = []) => [...old, formatted]);
-    }
   };
 
   return { messages, isLoading, sendMessage };
