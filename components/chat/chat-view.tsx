@@ -175,23 +175,25 @@ export const ChatView = ({
             <div
               key={msg.id}
               id={`chat-message-${msg.id}`}
-              className={`group flex gap-3 px-4 py-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#292929] transition-colors relative ${showHeader ? 'mt-3' : 'mt-0'}`}
+              className={`group flex gap-3 px-4 py-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#292929] transition-colors relative ${showHeader ? 'mt-3' : 'mt-0'} ${isMe ? 'flex-row-reverse' : ''}`}
             >
-              {/* Sender Avatar */}
-              <div className="flex-shrink-0 w-9 pt-1">
-                {showHeader ? (
-                  <div className="w-9 h-9 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-xs flex items-center justify-center overflow-hidden">
-                    {msg.senderAvatar || msg.senderName?.charAt(0) || "U"}
-                  </div>
-                ) : (
-                  <div className="w-9 h-9" />
-                )}
-              </div>
+              {/* Sender Avatar (hidden for own messages) */}
+              {!isMe && (
+                <div className="flex-shrink-0 w-9 pt-1">
+                  {showHeader ? (
+                    <div className="w-9 h-9 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-xs flex items-center justify-center overflow-hidden">
+                      {msg.senderAvatar || msg.senderName?.charAt(0) || "U"}
+                    </div>
+                  ) : (
+                    <div className="w-9 h-9" />
+                  )}
+                </div>
+              )}
 
-              <div className="flex-1 min-w-0 pt-0.5 pb-1">
+              <div className={`flex flex-col min-w-0 pt-0.5 pb-1 max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                 {/* Sender Name + Timestamp Line */}
-                {showHeader && (
-                  <div className="flex items-baseline gap-2 mb-0.5">
+                {showHeader && !isMe && (
+                  <div className="flex items-baseline gap-2 mb-1 flex-row">
                     <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight">
                       {msg.senderName || "Unknown"}
                     </span>
@@ -200,15 +202,26 @@ export const ChatView = ({
                     </span>
                   </div>
                 )}
+                {showHeader && isMe && (
+                  <div className="flex items-baseline gap-2 mb-1 flex-row-reverse">
+                    <span className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )}
 
-                {/* Message Content */}
-                <p className="text-[13px] text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap break-words select-text">
+                {/* Message Content Bubble */}
+                <div className={`relative px-3.5 py-2 rounded-2xl text-[13.5px] leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
+                  isMe 
+                    ? 'bg-[#5B5FC7] dark:bg-[#7977F7] text-white rounded-tr-sm' 
+                    : 'bg-white dark:bg-[#3B3A39] text-[var(--text-primary)] border border-[var(--border-color)] rounded-tl-sm'
+                }`}>
                   {msg.content}
-                </p>
+                </div>
 
                 {/* Reactions */}
                 {msg.reactions && msg.reactions.length > 0 && (
-                  <div className="flex gap-1.5 mt-2">
+                  <div className={`flex gap-1.5 mt-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                     {msg.reactions.map((react, idx) => (
                       <button
                         key={idx}
@@ -216,7 +229,7 @@ export const ChatView = ({
                         className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all ${
                           react.users.includes(currentUser.id)
                             ? 'bg-[#EBF3FC] dark:bg-[#2B3C5A] border-[#CDE1F9] dark:border-[#3D5276] text-[#006CBE] dark:text-[#6CB8F9]'
-                            : 'bg-transparent border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                            : 'bg-white dark:bg-[#292929] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644]'
                         }`}
                       >
                         <span>{react.emoji}</span>
@@ -230,7 +243,7 @@ export const ChatView = ({
                 {hasThread && (
                   <button
                     onClick={() => onOpenThread(msg)}
-                    className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-[#5B5FC7] dark:text-[#7977F7] hover:underline"
+                    className={`mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#5B5FC7] dark:text-[#7977F7] hover:underline ${isMe ? 'flex-row-reverse' : ''}`}
                   >
                     <CornerUpRight className="w-3.5 h-3.5" />
                     <span>{msg.replyCount} {(msg.replyCount || 0) === 1 ? 'reply' : 'replies'}</span>
@@ -238,8 +251,8 @@ export const ChatView = ({
                 )}
               </div>
 
-              {/* Message Hover Actions Toolbar (Teams style float top right) */}
-              <div className="absolute -top-3 right-6 bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-1 z-20">
+              {/* Message Hover Actions Toolbar */}
+              <div className={`absolute -top-3 ${isMe ? 'left-6' : 'right-6'} bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-1 z-20`}>
                 {/* Quick Emoji Actions */}
                 {quickReactions.slice(0, 4).map((emoji) => (
                   <button
