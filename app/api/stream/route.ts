@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Redis from "ioredis";
+import { redis } from "@/lib/redis";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -9,37 +9,33 @@ export async function GET(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // Set up Server-Sent Events headers
+  if (!redis) {
+    return new Response("Redis not configured", { status: 500 });
+  }
+
+  const r = redis;
+
   const headers = new Headers({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
     "Connection": "keep-alive",
   });
 
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    return new Response("Redis not configured", { status: 500 });
-  }
+  let subscriber: import("ioredis").Redis | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const subscriber = new Redis(redisUrl, {
-        maxRetriesPerRequest: 3,
-        lazyConnect: true,
-      });
-      await subscriber.connect().catch(() => null);
+      subscriber = r.duplicate();
 
-      // Ping to keep connection alive
       const pingInterval = setInterval(() => {
         try {
           controller.enqueue(`: ping\n\n`);
-        } catch (e) {
+        } catch {
           clearInterval(pingInterval);
         }
       }, 30000);
 
       try {
-        // Fetch all channels the user belongs to
         const [teamMemberships, dmMemberships] = await Promise.all([
           prisma.teamMember.findMany({
             where: { userId: session.userId },
@@ -58,13 +54,11 @@ export async function GET(req: NextRequest) {
 
         if (redisChannels.length > 0) {
           await subscriber.subscribe(...redisChannels);
-          
-          subscriber.on("message", (channel, message) => {
+          subscriber.on("message", (_channel, message) => {
             try {
-              // Send the event to the client
               controller.enqueue(`data: ${message}\n\n`);
-            } catch (err) {
-              console.error("Error enqueuing message", err);
+            } catch {
+              // stream closed
             }
           });
         }
@@ -75,11 +69,13 @@ export async function GET(req: NextRequest) {
 
       req.signal.addEventListener("abort", () => {
         clearInterval(pingInterval);
-        subscriber.quit();
-        try {
-          controller.close();
-        } catch (e) {}
+        subscriber?.unsubscribe().catch(() => {});
+        subscriber?.disconnect();
       });
+    },
+    cancel() {
+      subscriber?.unsubscribe().catch(() => {});
+      subscriber?.disconnect();
     },
   });
 
