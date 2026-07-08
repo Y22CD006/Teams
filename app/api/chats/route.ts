@@ -24,6 +24,7 @@ export async function GET() {
           messages: {
             include: {
               author: { select: { id: true, name: true } },
+              readReceipts: { where: { userId: session.userId } },
             },
             orderBy: { createdAt: "asc" },
           },
@@ -52,7 +53,7 @@ export async function GET() {
       name,
       type: isGroup ? "group" as const : "direct" as const,
       participants,
-      unreadCount: 0,
+      unreadCount: dm.messages.filter((msg: any) => msg.authorId !== session.userId && msg.readReceipts?.length === 0).length,
       messages: dm.messages.map((msg) => ({
         id: msg.id,
         senderId: msg.authorId,
@@ -92,7 +93,10 @@ export async function POST(req: NextRequest) {
         include: { user: { select: { id: true, name: true, email: true } } },
       },
       messages: {
-        include: { author: { select: { id: true, name: true } } },
+        include: { 
+          author: { select: { id: true, name: true } },
+          readReceipts: { where: { userId: session.userId } },
+        },
         orderBy: { createdAt: "asc" },
       },
     },
@@ -121,7 +125,10 @@ export async function POST(req: NextRequest) {
         include: { user: { select: { id: true, name: true, email: true } } },
       },
       messages: {
-        include: { author: { select: { id: true, name: true } } },
+        include: { 
+          author: { select: { id: true, name: true } },
+          readReceipts: { where: { userId: session.userId } },
+        },
         orderBy: { createdAt: "asc" },
       },
     },
@@ -152,7 +159,7 @@ function formatChat(dm: any, currentUserId: string) {
     name,
     type: dm.isGroup ? "group" as const : "direct" as const,
     participants,
-    unreadCount: 0,
+    unreadCount: dm.messages?.filter((msg: any) => msg.authorId !== currentUserId && msg.readReceipts?.length === 0).length || 0,
     messages: dm.messages.map((msg: any) => ({
       id: msg.id,
       senderId: msg.authorId,
