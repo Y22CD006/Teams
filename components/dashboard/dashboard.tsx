@@ -23,7 +23,7 @@ import {
 import {
   fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
   addTeam, addChannel, removeTeam, removeChannel,
-  addMeeting, addTask,
+  addMeeting, addTask, markAsRead
 } from "@/lib/store/dataSlice";
 
 function formatTimeAgo(iso: string): string {
@@ -118,6 +118,38 @@ export function Dashboard() {
     if (activeChannelId) localStorage.setItem("activeChannelId", activeChannelId);
   }, [activeChannelId]);
 
+  // Global SSE listener for all chats and channels
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const eventSource = new EventSource('/api/stream');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.type === 'new-message') {
+          const msg = parsed.data;
+          
+          const isDm = msg.dmId != null;
+          const id = msg.dmId || msg.channelId;
+          
+          dispatch(addMessage({
+            chatId: isDm ? id : undefined,
+            channelId: !isDm ? id : undefined,
+            message: msg,
+            isMine: msg.senderId === currentUser.id
+          }));
+        }
+      } catch (err) {
+        // Ping or unparseable messages
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [currentUser, dispatch]);
+
   useEffect(() => {
     dispatch(fetchCurrentUser());
     dispatch(fetchAllData());
@@ -160,15 +192,29 @@ export function Dashboard() {
     }
   };
 
-  const handleSelectChat = (chatId: string) => {
-    dispatch(setActiveChatId(chatId));
+  const handleSelectChat = (id: string) => {
+    dispatch(setActiveChatId(id));
+    dispatch(setActiveChannelId(null));
     dispatch(setActiveView("chat"));
+    dispatch(markAsRead({ chatId: id }));
+    fetch("/api/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId: id }),
+    }).catch(e => console.error("Failed to mark chat as read", e));
   };
 
   const handleSelectChannel = (teamId: string, channelId: string) => {
-    dispatch(setActiveTeamId(teamId));
     dispatch(setActiveChannelId(channelId));
+    dispatch(setActiveChatId(null));
+    dispatch(setActiveTeamId(teamId));
     dispatch(setActiveView("teams"));
+    dispatch(markAsRead({ channelId }));
+    fetch("/api/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(e => console.error("Failed to mark channel as read", e));
   };
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
@@ -182,7 +228,7 @@ export function Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        dispatch(addMessage({ chatId: activeChatId, message: data.message }));
+        dispatch(addMessage({ chatId: activeChatId, message: data.message, isMine: true }));
       }
     } else if (activeView === "teams" && activeTeamId && activeChannelId) {
       const res = await fetch("/api/messages", {
@@ -192,7 +238,7 @@ export function Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        dispatch(addMessage({ channelId: activeChannelId, message: data.message }));
+        dispatch(addMessage({ channelId: activeChannelId, message: data.message, isMine: true }));
       }
     }
   };

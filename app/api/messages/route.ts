@@ -61,6 +61,8 @@ export async function POST(req: NextRequest) {
       : (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
     content: msg.content,
     timestamp: msg.createdAt.toISOString(),
+    channelId: msg.channelId,
+    dmId: msg.dmId,
     reactions: [],
     replyCount: 0,
   };

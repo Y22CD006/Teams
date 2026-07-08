@@ -56,8 +56,6 @@ export const ChatView = ({
     if (!inputText.trim()) return;
     
     onSendMessage(inputText);
-    
-    // Send to actual DB and broadcast via Redis SSE
     await sendMessage(inputText);
     
     setInputText('');
@@ -81,7 +79,6 @@ export const ChatView = ({
     ? activeChannel?.description 
     : activeChat?.participants.filter(p => p.id !== currentUser.id).map(p => p.role).join(', ') || '';
 
-  // Use real DB messages if available, otherwise fallback to mock so it's not totally empty
   const messages = dbMessages.length > 0 ? dbMessages : (isChannel ? activeChannel?.messages : activeChat?.messages) || [];
 
   const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
@@ -184,7 +181,7 @@ export const ChatView = ({
               <div className="flex-shrink-0 w-9 pt-1">
                 {showHeader ? (
                   <div className="w-9 h-9 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-xs flex items-center justify-center overflow-hidden">
-                    {msg.senderAvatar || msg.senderName.charAt(0)}
+                    {msg.senderAvatar || msg.senderName?.charAt(0) || "U"}
                   </div>
                 ) : (
                   <div className="w-9 h-9" />
@@ -196,7 +193,7 @@ export const ChatView = ({
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight">
-                      {msg.senderName}
+                      {msg.senderName || "Unknown"}
                     </span>
                     <span className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
