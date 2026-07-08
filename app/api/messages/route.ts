@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { pusherServer } from "@/lib/pusher";
-import { cacheDel } from "@/lib/redis";
+import { redis, cacheDel } from "@/lib/redis";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
       dmId: dmId || null,
     },
     include: {
-      author: { select: { id: true, name: true } },
+      author: { select: { id: true, name: true, imageUrl: true } },
     },
   });
 
@@ -57,16 +56,20 @@ export async function POST(req: NextRequest) {
     id: msg.id,
     senderId: msg.authorId,
     senderName: msg.author.name || "Unknown",
-    senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+    senderAvatar: msg.author.imageUrl
+      ? msg.author.imageUrl.substring(0, 2).toUpperCase()
+      : (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
     content: msg.content,
     timestamp: msg.createdAt.toISOString(),
     reactions: [],
     replyCount: 0,
   };
 
-  const pusherChannel = channelId ? `channel-${channelId}` : `dm-${dmId}`;
-  if (pusherServer) {
-    await pusherServer.trigger(pusherChannel, "new-message", msg);
+  if (redis) {
+    const channelKey = channelId || dmId;
+    if (channelKey) {
+      await redis.publish(`message:${channelKey}`, JSON.stringify(formatted));
+    }
   }
 
   await cacheDel(`user:${session.userId}:activity`);

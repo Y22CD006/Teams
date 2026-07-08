@@ -33,8 +33,6 @@
     "livekit-server-sdk": "^2.0.0",
     "lucide-react": "^0.460.0",
     "next": "^16.2.10",
-    "pusher": "^5.3.4",
-    "pusher-js": "^8.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-redux": "^9.3.0",
