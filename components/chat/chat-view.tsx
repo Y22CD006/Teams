@@ -6,6 +6,7 @@ import {
   MoreHorizontal, CornerUpRight, Trash2, Heart, ThumbsUp, Flame,
   CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Chat, Team, Channel, Message, User } from '@/lib/types';
 import { useChat } from '@/hooks/use-chat';
 
@@ -80,8 +81,45 @@ export const ChatView = ({
 
   const messages = dbMessages.length > 0 ? dbMessages : (isChannel ? activeChannel?.messages : activeChat?.messages) || [];
 
-  const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
+  const queryClient = useQueryClient();
 
+  const handleReactionClick = async (messageId: string, emoji: string) => {
+    await fetch(`/api/messages/${messageId}/reactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+
+    const queryKey = isChannel
+      ? ['messages', 'channel', activeChannel!.id]
+      : ['messages', 'dm', activeChat!.id];
+
+    queryClient.setQueryData<Message[]>(queryKey, (old = []) =>
+      old.map((m) => {
+        if (m.id !== messageId) return m;
+        const existingIdx = m.reactions.findIndex((r) => r.emoji === emoji);
+        let newReactions = [...m.reactions];
+        if (existingIdx >= 0) {
+          const existing = newReactions[existingIdx];
+          if (existing.users.includes(currentUser.id)) {
+            const filtered = existing.users.filter((uid) => uid !== currentUser.id);
+            newReactions = filtered.length === 0
+              ? newReactions.filter((r) => r.emoji !== emoji)
+              : newReactions.map((r) =>
+                  r.emoji === emoji ? { ...r, count: r.count - 1, users: filtered } : r
+                );
+          } else {
+            newReactions[existingIdx] = { ...existing, count: existing.count + 1, users: [...existing.users, currentUser.id] };
+          }
+        } else {
+          newReactions = [...newReactions, { emoji, count: 1, users: [currentUser.id] }];
+        }
+        return { ...m, reactions: newReactions };
+      })
+    );
+  };
+
+  const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
   return (
     <div id="chat-messages-canvas" className="flex-1 bg-[var(--bg-primary)] flex flex-col h-full overflow-hidden min-w-0">
       
@@ -224,7 +262,7 @@ export const ChatView = ({
                     {msg.reactions.map((react, idx) => (
                       <button
                         key={idx}
-                        onClick={() => onAddReaction(msg.id, react.emoji)}
+                        onClick={() => handleReactionClick(msg.id, react.emoji)}
                         className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all ${
                           react.users.includes(currentUser.id)
                             ? 'bg-[#EBF3FC] dark:bg-[#2B3C5A] border-[#CDE1F9] dark:border-[#3D5276] text-[#006CBE] dark:text-[#6CB8F9]'
@@ -256,7 +294,7 @@ export const ChatView = ({
                 {quickReactions.slice(0, 4).map((emoji) => (
                   <button
                     key={emoji}
-                    onClick={() => onAddReaction(msg.id, emoji)}
+                    onClick={() => handleReactionClick(msg.id, emoji)}
                     className="p-1 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-sm transition-all hover:scale-110"
                   >
                     {emoji}

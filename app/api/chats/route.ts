@@ -22,12 +22,11 @@ export async function GET() {
             },
           },
           messages: {
+            take: 1,
+            orderBy: { createdAt: "desc" },
             include: {
               author: { select: { id: true, name: true } },
-              readReceipts: { where: { userId: session.userId } },
-              reactions: { include: { user: { select: { id: true } } } },
             },
-            orderBy: { createdAt: "asc" },
           },
         },
       },
@@ -35,7 +34,21 @@ export async function GET() {
     orderBy: { joinedAt: "desc" },
   });
 
-  const chats = memberships.map((m) => {
+  const dmIds = memberships.map(m => m.dm.id);
+
+  const unreadCounts = await Promise.all(
+    dmIds.map(dmId =>
+      prisma.message.count({
+        where: {
+          dmId,
+          authorId: { not: session.userId },
+          readReceipts: { none: { userId: session.userId } },
+        },
+      })
+    )
+  );
+
+  const chats = memberships.map((m, i) => {
     const dm = m.dm;
     const otherMembers = dm.members.filter((mem) => mem.userId !== session.userId);
     const name = dm.name || otherMembers.map((mem) => mem.user.name).join(", ") || "Unknown";
@@ -49,22 +62,24 @@ export async function GET() {
       email: mem.user.email,
     }));
 
+    const lastMsg = dm.messages[0];
+
     return {
       id: dm.id,
       name,
       type: isGroup ? "group" as const : "direct" as const,
       participants,
-      unreadCount: dm.messages.filter((msg: any) => msg.authorId !== session.userId && msg.readReceipts?.length === 0).length,
-      messages: dm.messages.map((msg) => ({
-        id: msg.id,
-        senderId: msg.authorId,
-        senderName: msg.author.name || "Unknown",
-        senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
-        content: msg.content,
-        timestamp: msg.createdAt.toISOString(),
-        reactions: msg.reactions ? formatReactions(msg.reactions) : [],
+      unreadCount: unreadCounts[i],
+      messages: lastMsg ? [{
+        id: lastMsg.id,
+        senderId: lastMsg.authorId,
+        senderName: lastMsg.author.name || "Unknown",
+        senderAvatar: (lastMsg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+        content: lastMsg.content,
+        timestamp: lastMsg.createdAt.toISOString(),
+        reactions: [],
         replyCount: 0,
-      })),
+      }] : [],
     };
   });
 

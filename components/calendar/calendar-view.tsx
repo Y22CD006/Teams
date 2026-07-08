@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Calendar, Clock, Users, Plus, ChevronLeft, ChevronRight,
   ListTodo, CalendarDays, LayoutGrid,
@@ -61,20 +61,7 @@ function tasksForDate(tasks: CalendarTask[], dateStr: string): CalendarTask[] {
   return tasks.filter((t) => t.date === dateStr);
 }
 
-function meetingsForDateAndHour(meetings: CalendarMeeting[], dateStr: string, hour: number): CalendarMeeting[] {
-  return meetings.filter((m) => {
-    if (m.date !== dateStr) return false;
-    const mHour = parseInt(m.startTime.split(':')[0], 10);
-    return mHour === hour;
-  });
-}
 
-function tasksForDateAndHour(tasks: CalendarTask[], dateStr: string, hour: number): CalendarTask[] {
-  return tasks.filter((t) => {
-    if (t.date !== dateStr) return false;
-    return true; // tasks show at top of day in week/day view, spread across hours
-  });
-}
 
 export const CalendarView = ({
   meetings, tasks, onAddMeeting, onAddTask, onJoinMeeting, selectedMeetingId,
@@ -127,6 +114,20 @@ export const CalendarView = ({
     setSelectedDateStr(formatDateStr(t.getFullYear(), t.getMonth(), t.getDate()));
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
+  const scheduleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (scheduleRef.current && !scheduleRef.current.contains(e.target as Node)) {
+        setShowScheduleDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleDayClick = (dateStr: string) => {
     setSelectedDateStr(dateStr);
     setShowScheduleForm(false);
@@ -135,16 +136,27 @@ export const CalendarView = ({
   const handleScheduleClick = (mode: 'meeting' | 'task') => {
     setFormMode(mode);
     setShowScheduleForm(true);
+    setShowScheduleDropdown(false);
   };
 
-  const handleFormSave = (data: Omit<CalendarMeeting, 'id'>) => {
-    onAddMeeting(data);
-    setShowScheduleForm(false);
+  const handleFormSave = async (data: Omit<CalendarMeeting, 'id'>) => {
+    setIsSubmitting(true);
+    try {
+      await onAddMeeting(data);
+      setShowScheduleForm(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleTaskSave = (data: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
-    onAddTask(data);
-    setShowScheduleForm(false);
+  const handleTaskSave = async (data: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
+    setIsSubmitting(true);
+    try {
+      await onAddTask(data);
+      setShowScheduleForm(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Month view
@@ -158,12 +170,10 @@ export const CalendarView = ({
       return {
         day: dayNum,
         dateStr,
-        meetings: meetingsForDate(meetings, dateStr),
-        tasks: tasksForDate(tasks, dateStr),
         isToday: isToday(year, month, dayNum),
       };
     }),
-  [year, month, daysInMonth, meetings, tasks]);
+  [year, month, daysInMonth]);
 
   const activeMeetingsForSelectedDay = meetingsForDate(meetings, selectedDateStr);
   const activeTasksForSelectedDay = tasksForDate(tasks, selectedDateStr);
@@ -175,31 +185,26 @@ export const CalendarView = ({
   // Day view
   const dayHours = hourSlots;
 
-  const formatWeekDateLabel = (d: Date) =>
-    d.toLocaleDateString([], { weekday: 'short', day: 'numeric' });
-
   const formatDayLabel = (d: Date) =>
     d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   const renderMonthView = () => (
-    <div className="space-y-4">
-      <div className="grid grid-cols-7 gap-1 text-center select-none pt-2">
+    <div className="space-y-2 sm:space-y-4">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center select-none pt-1 sm:pt-2">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="text-[10px] font-bold text-gray-500 font-mono uppercase tracking-wider py-1">
+          <div key={d} className="text-[8px] sm:text-[10px] font-bold text-gray-500 font-mono uppercase tracking-wider py-0.5 sm:py-1">
             {d}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1.5">
         {Array.from({ length: firstDay }, (_, i) => (
           <div key={`blank-${i}`} className="aspect-square bg-transparent border border-transparent rounded-xl" />
         ))}
 
         {monthDays.map((cell) => {
           const isSel = selectedDateStr === cell.dateStr;
-          const totalItems = cell.meetings.length + cell.tasks.length;
-          const maxVisible = 3;
           return (
             <div
               key={cell.day}
@@ -212,7 +217,7 @@ export const CalendarView = ({
                     : 'border-[var(--border-color)] hover:border-gray-500 hover:bg-[#1F2937]/30'
               }`}
             >
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md mb-0.5 self-start ${
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md self-start ${
                 cell.isToday
                   ? 'text-white bg-[#6366F1] font-bold shadow-sm'
                   : isSel
@@ -221,40 +226,6 @@ export const CalendarView = ({
               }`}>
                 {cell.day}
               </span>
-
-              <div className="flex-1 space-y-0.5 overflow-hidden">
-                {cell.tasks.slice(0, maxVisible).map((t) => (
-                  <div
-                    key={t.id}
-                    className="text-[8px] px-1 py-0.5 rounded leading-tight truncate font-medium bg-amber-500/15 text-amber-400 border-l-2 border-amber-500"
-                    title={`${t.title}${t.time ? ` @ ${t.time}` : ''} (${t.priority})`}
-                  >
-                    {t.time && <span className="text-[7px] opacity-70 mr-0.5">{t.time}</span>}
-                    {t.title}
-                  </div>
-                ))}
-                {cell.tasks.length > 0 && cell.meetings.length > 0 && (
-                  <div className="h-px bg-[var(--border-color)] mx-1" />
-                )}
-                {cell.meetings.slice(0, Math.max(0, maxVisible - cell.tasks.length)).map((m) => (
-                  <div
-                    key={m.id}
-                    className={`text-[8px] px-1 py-0.5 rounded leading-tight truncate font-medium ${
-                      m.isLive
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
-                    }`}
-                    title={`${m.title} ${m.startTime}-${m.endTime}`}
-                  >
-                    {m.title}
-                  </div>
-                ))}
-                {totalItems > maxVisible && (
-                  <div className="text-[7px] text-gray-500 font-medium px-1">
-                    +{totalItems - maxVisible} more
-                  </div>
-                )}
-              </div>
             </div>
           );
         })}
@@ -296,37 +267,6 @@ export const CalendarView = ({
           })}
         </div>
 
-        {/* All-day tasks row */}
-        {weekDays.some((_, i) => tasksForDate(tasks, weekDateStrs[i]).length > 0) && (
-          <div className="grid grid-cols-8 gap-px bg-[var(--border-color)] border-b border-[var(--border-color)]">
-            <div className="bg-[var(--bg-secondary)] p-1.5 text-[8px] text-gray-500 font-mono text-right pr-2 flex items-center justify-end">
-              all-day
-            </div>
-            {weekDays.map((_, dayIdx) => {
-              const ds = weekDateStrs[dayIdx];
-              const dayTasks = tasksForDate(tasks, ds);
-              return (
-                <div
-                  key={`task-${dayIdx}`}
-                  onClick={() => handleDayClick(ds)}
-                  className="bg-[var(--bg-primary)] p-1 cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors min-h-[28px]"
-                >
-                  {dayTasks.map((t) => (
-                    <div
-                      key={t.id}
-                      className="text-[8px] px-1 py-0.5 rounded mb-0.5 truncate font-medium bg-amber-500/15 text-amber-400 border-l-2 border-amber-500"
-                      title={`${t.title}${t.time ? ` @ ${t.time}` : ''} (${t.priority})`}
-                    >
-                      {t.time && <span className="text-[7px] opacity-70 mr-0.5">{t.time}</span>}
-                      {t.title}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-8 gap-px bg-[var(--border-color)]">
             {hourSlots.map((hour) => (
@@ -336,26 +276,12 @@ export const CalendarView = ({
                 </div>
                 {weekDays.map((_, dayIdx) => {
                   const ds = weekDateStrs[dayIdx];
-                  const dayMeetings = meetingsForDateAndHour(meetings, ds, parseInt(hour.split(':')[0], 10));
                   return (
                     <div
                       key={`${hour}-${dayIdx}`}
                       onClick={() => handleDayClick(ds)}
                       className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors"
-                    >
-                      {dayMeetings.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`text-[9px] px-1 py-0.5 rounded mb-0.5 truncate font-medium ${
-                            m.isLive
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-indigo-500/10 text-indigo-300'
-                          }`}
-                        >
-                          {m.title}
-                        </div>
-                      ))}
-                    </div>
+                    />
                   );
                 })}
               </div>
@@ -367,71 +293,17 @@ export const CalendarView = ({
   };
 
   const renderDayView = () => {
-    const dayMeetings = meetingsForDate(meetings, selectedDateStr);
-    const dayTasks = tasksForDate(tasks, selectedDateStr);
-
     return (
       <div className="flex-1 overflow-y-auto">
-        {dayTasks.length > 0 && (
-          <div className="border-b border-amber-500/20 bg-amber-500/[0.02] px-4 py-2 space-y-1">
-            <p className="text-[10px] font-bold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-1">
-              <ListTodo className="w-3 h-3" /> Tasks
-            </p>
-            {dayTasks.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-2 text-xs bg-amber-500/10 border-l-2 border-amber-500 rounded px-3 py-1.5"
-              >
-                {t.time && (
-                  <span className="text-[10px] text-amber-400 font-mono flex-shrink-0">{t.time}</span>
-                )}
-                <span className="text-[var(--text-primary)] font-medium">{t.title}</span>
-                <span className={`text-[9px] font-bold ml-auto ${
-                  t.priority === 'HIGH' ? 'text-rose-400' : t.priority === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'
-                }`}>
-                  {t.priority}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className="divide-y divide-[var(--border-color)]">
-          {dayHours.map((hour) => {
-            const hourNum = parseInt(hour.split(':')[0], 10);
-            const hourMeetings = dayMeetings.filter((m) => {
-              const mHour = parseInt(m.startTime.split(':')[0], 10);
-              return mHour === hourNum;
-            });
-
-            return (
-              <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
-                <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
-                  {hour}
-                </div>
-                <div className="flex-1 p-1 space-y-0.5">
-                  {hourMeetings.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`text-xs p-2 rounded-lg border ${
-                        m.isLive
-                          ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
-                          : 'bg-indigo-500/5 border-indigo-500/20 text-indigo-300'
-                      }`}
-                    >
-                      <div className="font-semibold text-[var(--text-primary)]">{m.title}</div>
-                      <div className="text-[10px] text-[var(--text-secondary)] flex items-center gap-2 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        <span>{m.startTime} - {m.endTime}</span>
-                        <Users className="w-3 h-3 ml-1" />
-                        <span className="truncate">{m.attendees.join(', ')}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {dayHours.map((hour) => (
+            <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
+              <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
+                {hour}
               </div>
-            );
-          })}
+              <div className="flex-1 p-1" />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -449,19 +321,40 @@ export const CalendarView = ({
               </p>
             </div>
             <div className="flex items-center gap-1">
+              <div ref={scheduleRef} className="relative">
+                <button
+                  onClick={() => setShowScheduleDropdown(!showScheduleDropdown)}
+                  className="bg-[#6366F1] text-white px-3 py-2 rounded-xl hover:bg-[#5053e1] transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  title="Schedule"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Schedule
+                </button>
+                {showScheduleDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => handleScheduleClick('meeting')}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                      Schedule Meeting
+                    </button>
+                    <button
+                      onClick={() => handleScheduleClick('task')}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                    >
+                      <ListTodo className="w-3.5 h-3.5 text-emerald-400" />
+                      Add Task
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
-                onClick={() => handleScheduleClick('task')}
-                className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-500 transition-all"
-                title="Add Task"
+                onClick={() => {}}
+                className="p-2 rounded-xl border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
+                title="Meeting Admin"
               >
-                <ListTodo className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleScheduleClick('meeting')}
-                className="bg-[#6366F1] text-white p-2 rounded-xl hover:bg-[#5053e1] transition-all"
-                title="Schedule Meeting"
-              >
-                <Plus className="w-4 h-4" />
+                <Users className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -510,7 +403,7 @@ export const CalendarView = ({
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] font-medium">Nothing scheduled</p>
                 <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto">
-                  Click "+" to schedule a meeting or add a task.
+                  Click Schedule to add a meeting or task.
                 </p>
               </div>
             ) : (
@@ -570,6 +463,7 @@ export const CalendarView = ({
             existingMeetings={meetings}
             onSave={handleFormSave}
             onCancel={() => setShowScheduleForm(false)}
+            isSubmitting={isSubmitting}
           />
         </div>
       ) : (
@@ -578,6 +472,7 @@ export const CalendarView = ({
             selectedDate={selectedDateStr}
             onSave={handleTaskSave}
             onCancel={() => setShowScheduleForm(false)}
+            isSubmitting={isSubmitting}
           />
         </div>
       )}
@@ -587,72 +482,72 @@ export const CalendarView = ({
   return (
     <div className="flex-1 bg-[var(--bg-primary)] flex flex-col md:flex-row h-full overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-5 pb-0 space-y-4">
+        <div className="p-3 sm:p-5 pb-0 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[#6366F1]">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="hidden sm:flex p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[#6366F1]">
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
+                <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight">
                   {viewType === 'day'
                     ? formatDayLabel(selectedDate)
                     : monthLabel}
                 </h2>
-                <p className="text-xs text-[var(--text-secondary)] font-mono">Teams Scheduler Sync</p>
+                <p className="text-[10px] sm:text-xs text-[var(--text-secondary)] font-mono">Teams Scheduler Sync</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-0.5">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-0.5">
                 <button
                   onClick={() => setViewType('month')}
-                  className={`p-1.5 rounded-md transition-colors ${viewType === 'month' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'month' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
                   title="Month view"
                 >
-                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <LayoutGrid className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                 </button>
                 <button
                   onClick={() => setViewType('week')}
-                  className={`p-1.5 rounded-md transition-colors ${viewType === 'week' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'week' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
                   title="Week view"
                 >
-                  <CalendarDays className="w-3.5 h-3.5" />
+                  <CalendarDays className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                 </button>
                 <button
                   onClick={() => setViewType('day')}
-                  className={`p-1.5 rounded-md transition-colors ${viewType === 'day' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'day' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
                   title="Day view"
                 >
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                 </button>
               </div>
 
               <div className="flex items-center gap-1">
                 <button
                   onClick={navigatePrevious}
-                  className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
+                  className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
                 </button>
                 <button
                   onClick={goToToday}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
                 >
                   Today
                 </button>
                 <button
                   onClick={navigateNext}
-                  className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
+                  className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 p-5 pt-3 overflow-hidden">
+        <div className="flex-1 p-3 sm:p-5 pt-2 sm:pt-3 overflow-hidden">
           {viewType === 'month' && (
             <div className="h-full overflow-y-auto">
               {renderMonthView()}
