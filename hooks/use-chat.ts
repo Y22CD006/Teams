@@ -21,7 +21,8 @@ export function useChat(channelId?: string, dmId?: string) {
         senderId: msg.author.id,
         senderName: msg.author.name,
         senderAvatar: msg.author.imageUrl ? msg.author.imageUrl.substring(0,2).toUpperCase() : msg.author.name.substring(0,2).toUpperCase(),
-        reactions: [],
+        reactions: msg.reactions || [],
+        replyCount: msg.replyCount || 0,
       }));
     },
     enabled: !!channelId || !!dmId,
@@ -47,7 +48,7 @@ export function useChat(channelId?: string, dmId?: string) {
           senderId: msg.senderId,
           senderName: msg.senderName,
           senderAvatar: msg.senderAvatar || msg.senderName.substring(0, 2).toUpperCase(),
-          reactions: [],
+          reactions: msg.reactions || [],
         };
 
         queryClient.setQueryData(queryKey, (old: Message[] = []) => {

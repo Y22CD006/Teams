@@ -25,6 +25,7 @@ export async function GET() {
             include: {
               author: { select: { id: true, name: true } },
               readReceipts: { where: { userId: session.userId } },
+              reactions: { include: { user: { select: { id: true } } } },
             },
             orderBy: { createdAt: "asc" },
           },
@@ -61,7 +62,7 @@ export async function GET() {
         senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
         content: msg.content,
         timestamp: msg.createdAt.toISOString(),
-        reactions: [],
+        reactions: msg.reactions ? formatReactions(msg.reactions) : [],
         replyCount: 0,
       })),
     };
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
         include: { 
           author: { select: { id: true, name: true } },
           readReceipts: { where: { userId: session.userId } },
+          reactions: { include: { user: { select: { id: true } } } },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -128,6 +130,7 @@ export async function POST(req: NextRequest) {
         include: { 
           author: { select: { id: true, name: true } },
           readReceipts: { where: { userId: session.userId } },
+          reactions: { include: { user: { select: { id: true } } } },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -167,8 +170,22 @@ function formatChat(dm: any, currentUserId: string) {
       senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
       content: msg.content,
       timestamp: msg.createdAt.toISOString(),
-      reactions: [],
+      reactions: msg.reactions ? formatReactions(msg.reactions) : [],
       replyCount: 0,
     })),
   };
+}
+
+function formatReactions(reactions: { emoji: string; user: { id: string } }[]) {
+  const grouped = new Map<string, { emoji: string; count: number; users: string[] }>();
+  for (const r of reactions) {
+    const existing = grouped.get(r.emoji);
+    if (existing) {
+      existing.count++;
+      existing.users.push(r.user.id);
+    } else {
+      grouped.set(r.emoji, { emoji: r.emoji, count: 1, users: [r.user.id] });
+    }
+  }
+  return Array.from(grouped.values());
 }
