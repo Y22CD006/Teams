@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { Chat, Team, Channel, Message, User, Attachment } from '@/lib/types';
+import { useChat } from '@/hooks/use-chat';
 
 interface ChatViewProps {
   currentUser: User;
@@ -46,9 +47,23 @@ export const ChatView = ({
     scrollToBottom();
   }, [activeChat, activeChannel, activeChat?.messages, activeChannel?.messages]);
 
-  const handleSend = () => {
+  const isChannel = !!activeChannel;
+  const { messages: dbMessages, isLoading, sendMessage } = useChat(
+    isChannel ? activeChannel.id : undefined,
+    !isChannel && activeChat ? activeChat.id : undefined
+  );
+
+  const handleSend = async () => {
     if (!inputText.trim() && selectedAttachments.length === 0) return;
+    
+    // We keep the local state for UI responsiveness (mock attachments etc)
     onSendMessage(inputText, selectedAttachments);
+    
+    // Send to actual DB and Pusher
+    if (inputText.trim()) {
+      await sendMessage(inputText);
+    }
+    
     setInputText('');
     setSelectedAttachments([]);
   };
@@ -80,13 +95,13 @@ export const ChatView = ({
     setFormatMenuOpen(false);
   };
 
-  const isChannel = !!activeChannel;
   const title = isChannel ? `# ${activeChannel?.name}` : activeChat?.name || '';
   const subtitle = isChannel 
     ? activeChannel?.description 
     : activeChat?.participants.filter(p => p.id !== currentUser.id).map(p => p.role).join(', ') || '';
 
-  const messages = isChannel ? activeChannel?.messages : activeChat?.messages || [];
+  // Use real DB messages if available, otherwise fallback to mock so it's not totally empty
+  const messages = dbMessages.length > 0 ? dbMessages : (isChannel ? activeChannel?.messages : activeChat?.messages) || [];
 
   const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
 
