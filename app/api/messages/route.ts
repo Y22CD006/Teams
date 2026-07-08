@@ -22,12 +22,32 @@ export async function GET(req: Request) {
     },
     include: {
       author: { select: { id: true, name: true, imageUrl: true, status: true, email: true } },
+      reactions: { include: { user: { select: { id: true } } } },
     },
     orderBy: { createdAt: "asc" },
     take: 50,
   });
 
-  return NextResponse.json({ messages });
+  const mapped = messages.map((msg) => ({
+    ...msg,
+    reactions: formatReactions(msg.reactions),
+  }));
+
+  return NextResponse.json({ messages: mapped });
+}
+
+function formatReactions(reactions: { emoji: string; user: { id: string } }[]) {
+  const grouped = new Map<string, { emoji: string; count: number; users: string[] }>();
+  for (const r of reactions) {
+    const existing = grouped.get(r.emoji);
+    if (existing) {
+      existing.count++;
+      existing.users.push(r.user.id);
+    } else {
+      grouped.set(r.emoji, { emoji: r.emoji, count: 1, users: [r.user.id] });
+    }
+  }
+  return Array.from(grouped.values());
 }
 
 export async function POST(req: NextRequest) {

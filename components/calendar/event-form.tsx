@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { AlertCircle, Clock, Sparkles } from 'lucide-react';
+import { AlertCircle, Clock, Sparkles, Loader2 } from 'lucide-react';
 import { CalendarMeeting } from '@/lib/types';
 
 interface EventFormProps {
@@ -7,6 +7,7 @@ interface EventFormProps {
   existingMeetings: CalendarMeeting[];
   onSave: (meeting: Omit<CalendarMeeting, 'id'>) => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
 function generateTimeSlots(): string[] {
@@ -48,7 +49,7 @@ function suggestSlots(existing: CalendarMeeting[], date: string): string[] {
   });
 }
 
-export function EventForm({ selectedDate, existingMeetings, onSave, onCancel }: EventFormProps) {
+export function EventForm({ selectedDate, existingMeetings, onSave, onCancel, isSubmitting }: EventFormProps) {
   const [title, setTitle] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -197,15 +198,18 @@ export function EventForm({ selectedDate, existingMeetings, onSave, onCancel }: 
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 bg-transparent hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold transition-all cursor-pointer"
+          disabled={isSubmitting}
+          className="flex-1 bg-transparent hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="flex-1 bg-[#6366F1] hover:bg-[#5053e1] text-white py-2 rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-950/40 cursor-pointer"
+          disabled={isSubmitting}
+          className="flex-1 bg-[#6366F1] hover:bg-[#5053e1] text-white py-2 rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-950/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
         >
-          Save
+          {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          {isSubmitting ? 'Saving...' : 'Save'}
         </button>
       </div>
     </form>

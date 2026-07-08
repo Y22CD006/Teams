@@ -12,9 +12,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const msg = await prisma.message.findUnique({ where: { id: messageId } });
   if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
 
-  const existing = await prisma.readReceipt.findFirst({
-    where: { userId: session.userId, messageId },
+  const existing = await prisma.reaction.findUnique({
+    where: { userId_messageId_emoji: { userId: session.userId, messageId, emoji } },
   });
 
-  return NextResponse.json({ success: true, emoji });
+  if (existing) {
+    await prisma.reaction.delete({ where: { id: existing.id } });
+    return NextResponse.json({ action: "removed", emoji });
+  }
+
+  await prisma.reaction.create({
+    data: { emoji, userId: session.userId, messageId },
+  });
+
+  return NextResponse.json({ action: "added", emoji });
 }

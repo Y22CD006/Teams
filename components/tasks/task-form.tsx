@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface TaskFormProps {
   selectedDate: string;
@@ -12,9 +12,10 @@ interface TaskFormProps {
     assigneeId?: string;
   }) => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
-export function TaskForm({ selectedDate, onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ selectedDate, onSave, onCancel, isSubmitting }: TaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
@@ -115,15 +116,18 @@ export function TaskForm({ selectedDate, onSave, onCancel }: TaskFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 bg-transparent hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold transition-all cursor-pointer"
+          disabled={isSubmitting}
+          className="flex-1 bg-transparent hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-semibold transition-all shadow-md shadow-emerald-950/40 cursor-pointer"
+          disabled={isSubmitting}
+          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-semibold transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
         >
-          Create Task
+          {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          {isSubmitting ? 'Saving...' : 'Create Task'}
         </button>
       </div>
     </form>
