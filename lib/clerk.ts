@@ -1,12 +1,8 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { getSession } from "./auth";
 
 export async function getAuthUserId(): Promise<string | null> {
-  const { userId } = await auth();
-  return userId;
-}
-
-export async function getCurrentUser() {
-  return currentUser();
+  const session = await getSession();
+  return session?.userId || null;
 }
 
 export function requireAuth(userId: string | null): asserts userId is string {

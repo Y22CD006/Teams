@@ -36,12 +36,17 @@ model User {
   email        String     @unique
   username     String     @unique
   name         String?
+  firstName    String?
+  middleName   String?
+  lastName     String?
+  phoneNumber  String?
   imageUrl     String?
   bio          String?
   password     String   @default("")
   timezone     String     @default("UTC")
   status       UserStatus @default(AVAILABLE)
   customStatus String?
+  role         String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -57,6 +62,11 @@ model User {
   createdTasks      Task[]            @relation("TaskCreator")
   createdEvents     Event[]
   readReceipts      ReadReceipt[]
+  sentRequests      FriendRequest[] @relation("SentRequests")
+  receivedRequests  FriendRequest[] @relation("ReceivedRequests")
+  activityEvents    ActivityEvent[]
+  storedFiles       StoredFile[]
+  notifications     Notification[]
 }
 
 model Team {
@@ -71,6 +81,7 @@ model Team {
   members  TeamMember[]
   channels Channel[]
   tasks    Task[]
+  storedFiles StoredFile[]
 }
 
 model TeamMember {
@@ -100,6 +111,7 @@ model Channel {
 
   members  ChannelMember[]
   messages Message[]
+  storedFiles StoredFile[]
 
   @@unique([teamId, name])
 }
@@ -236,6 +248,96 @@ model ReadReceipt {
   message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([userId, messageId])
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FriendRequest {
+  id          String              @id @default(cuid())
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  senderId   String
+  sender     User   @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   User   @relation("ReceivedRequests", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, recipientId])
+  @@index([recipientId])
+  @@index([senderId])
+}
+
+model StoredFile {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  size      String
+  createdAt DateTime @default(now())
+
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([uploadedById])
+}
+
+enum ActivityEventType {
+  MESSAGE_SENT
+  FILE_UPLOADED
+  MEETING_CREATED
+  FRIEND_ACCEPTED
+  STATUS_CHANGED
+  TEAM_JOINED
+  CHANNEL_CREATED
+}
+
+enum NotificationType {
+  MESSAGE_REPLY
+  TAG
+  FILE_SHARED
+  SYSTEM
+  FRIEND_REQUEST
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  detail    String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  actorId   String?
+  teamId    String?
+  channelId String?
+
+  @@index([userId, createdAt])
+}
+
+model ActivityEvent {
+  id        String             @id @default(cuid())
+  type      ActivityEventType
+  metadata  Json?
+  createdAt DateTime           @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Session {

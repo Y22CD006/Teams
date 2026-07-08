@@ -1,7 +1,7 @@
 import { generateLiveKitToken } from "@/lib/api/livekit";
 
-export function createMeetingRoom(identity: string, room: string) {
-  const token = generateLiveKitToken(identity, room);
+export async function createMeetingRoom(identity: string, room: string) {
+  const token = await generateLiveKitToken(identity, room);
   return {
     room,
     token,

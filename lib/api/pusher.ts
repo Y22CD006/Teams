@@ -7,6 +7,7 @@ type ChannelEvent = {
 };
 
 export async function publishToChannel({ channel, event, data }: ChannelEvent) {
+  if (!pusherServer) return;
   await pusherServer.trigger(channel, event, data);
 }
 

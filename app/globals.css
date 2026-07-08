@@ -24,6 +24,24 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+
+    --bg-primary: #0B0F19;
+    --bg-secondary: #111827;
+    --bg-tertiary: #1F2937;
+    --text-primary: #ffffff;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --border-color: #374151;
+  }
+
+  .light {
+    --bg-primary: #ffffff;
+    --bg-secondary: #F9FAFB;
+    --bg-tertiary: #F3F4F6;
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
+    --text-muted: #9CA3AF;
+    --border-color: #D1D5DB;
   }
 }
 

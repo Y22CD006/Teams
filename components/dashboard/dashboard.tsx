@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
-import { Calendar, MessageSquare, HardDrive } from "lucide-react";
+import { useState, useEffect, FormEvent, useCallback, useMemo } from "react";
+import { Calendar, MessageSquare, HardDrive, Loader2, Search } from "lucide-react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ListPanel } from "@/components/layout/list-panel";
 import { ChatView } from "@/components/chat/chat-view";
@@ -9,174 +9,205 @@ import { ThreadPanel } from "@/components/messages/thread-panel";
 import { MeetingView } from "@/components/meetings/meeting-view";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
+import { PeopleView } from "@/components/people/people-view";
+import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, CalendarTask, FileItem, Attachment, UserStatus } from "@/lib/types";
+import { useAppSelector, useAppDispatch } from "@/lib/store/hooks";
 import {
-  CURRENT_USER, USERS, MOCK_TEAMS, MOCK_CHATS, MOCK_THREAD_REPLIES,
-  MOCK_MEETINGS, MOCK_FILES,
-} from "@/lib/data";
-import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, FileItem, Attachment, UserStatus, User } from "@/lib/types";
+  fetchCurrentUser, updateUser,
+} from "@/lib/store/authSlice";
+import {
+  setActiveView, setActiveChatId, setActiveTeamId, setActiveChannelId,
+  setActiveThreadParent, setActiveMeeting, setActiveFileView,
+  setSelectedMeetingId, setShowSettingsModal, toggleTheme,
+} from "@/lib/store/uiSlice";
+import {
+  fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
+  addTeam, addChannel, removeTeam, removeChannel,
+  addMeeting, addTask,
+} from "@/lib/store/dataSlice";
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export function Dashboard() {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("theme");
-      if (saved === "dark" || saved === "light") return saved;
+  const dispatch = useAppDispatch();
+  const currentUser = useAppSelector((s) => s.auth.user);
+  const theme = useAppSelector((s) => s.ui.theme);
+  const activeView = useAppSelector((s) => s.ui.activeView);
+  const activeChatId = useAppSelector((s) => s.ui.activeChatId);
+  const activeTeamId = useAppSelector((s) => s.ui.activeTeamId);
+  const activeChannelId = useAppSelector((s) => s.ui.activeChannelId);
+  const activeThreadParent = useAppSelector((s) => s.ui.activeThreadParent);
+  const activeMeeting = useAppSelector((s) => s.ui.activeMeeting);
+  const activeFileView = useAppSelector((s) => s.ui.activeFileView);
+  const selectedMeetingId = useAppSelector((s) => s.ui.selectedMeetingId);
+  const showSettingsModal = useAppSelector((s) => s.ui.showSettingsModal);
+  const chats = useAppSelector((s) => s.data.chats);
+  const teams = useAppSelector((s) => s.data.teams);
+  const meetings = useAppSelector((s) => s.data.meetings);
+  const tasks = useAppSelector((s) => s.data.tasks);
+  const files = useAppSelector((s) => s.data.files);
+  const threadReplies = useAppSelector((s) => s.data.threadReplies);
+  const allUsers = useAppSelector((s) => s.data.allUsers);
+  const loading = useAppSelector((s) => s.data.loading);
+  const [activityEvents, setActivityEvents] = useState<any[]>([]);
+  const [activitySummary, setActivitySummary] = useState<{
+    meetingsCount: number; filesCount: number; unreadCount: number;
+  }>({ meetingsCount: 0, filesCount: 0, unreadCount: 0 });
+  const [notifBadge, setNotifBadge] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/notifications")
+      .then((r) => r.ok ? r.json() : { notifications: [] })
+      .then((data) => setNotifBadge((data.notifications || []).filter((n: any) => !n.read).length));
+  }, []);
+
+  const chatUnread = chats.reduce((acc, c) => acc + c.unreadCount, 0)
+    + teams.reduce((acc, t) => acc + t.channels.reduce((sum, ch) => sum + ch.unreadCount, 0), 0);
+
+  const todayMeetings = meetings.filter((m) => m.date === new Date().toISOString().split("T")[0]);
+
+  const badges = {
+    activity: notifBadge,
+    chat: chatUnread,
+    calendar: todayMeetings.length,
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark" || saved === "light") {
+      if (saved !== theme) dispatch(toggleTheme());
     }
-    return "dark";
-  });
+    const savedView = localStorage.getItem("activeView");
+    if (savedView) dispatch(setActiveView(savedView));
+    const savedChat = localStorage.getItem("activeChatId");
+    if (savedChat) dispatch(setActiveChatId(savedChat));
+    const savedTeam = localStorage.getItem("activeTeamId");
+    if (savedTeam) dispatch(setActiveTeamId(savedTeam));
+    const savedChannel = localStorage.getItem("activeChannelId");
+    if (savedChannel) dispatch(setActiveChannelId(savedChannel));
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "light") {
-      root.classList.add("light");
-    } else {
-      root.classList.remove("light");
-    }
+    root.classList.toggle("light", theme === "light");
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const [activeView, setActiveView] = useState<string>("chat");
-  const [chats, setChats] = useState<Chat[]>(MOCK_CHATS);
-  const [teams, setTeams] = useState<Team[]>(MOCK_TEAMS);
-  const [meetings, setMeetings] = useState<CalendarMeeting[]>(MOCK_MEETINGS);
-  const [files, setFiles] = useState<FileItem[]>(MOCK_FILES);
-  const [threadReplies, setThreadReplies] = useState<ThreadReply[]>(MOCK_THREAD_REPLIES);
-
-  const [activeChatId, setActiveChatId] = useState<string | null>("chat-1");
-  const [activeTeamId, setActiveTeamId] = useState<string | null>("team-1");
-  const [activeChannelId, setActiveChannelId] = useState<string | null>("c-apollo-gen");
-
-  const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null);
-  const [activeMeeting, setActiveMeeting] = useState<CalendarMeeting | null>(null);
-  const [activeFileView, setActiveFileView] = useState<string>("f-recents");
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
-  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
-
-  const currentUser: User = CURRENT_USER;
-
-  const [settingsRole, setSettingsRole] = useState(currentUser.role);
-  const [settingsStatusMsg, setSettingsStatusMsg] = useState(currentUser.customStatus || "");
+  useEffect(() => {
+    localStorage.setItem("activeView", activeView);
+  }, [activeView]);
 
   useEffect(() => {
-    setSettingsRole(currentUser.role);
-    setSettingsStatusMsg(currentUser.customStatus || "");
-  }, [currentUser.role, currentUser.customStatus]);
+    if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+  }, [activeChatId]);
+
+  useEffect(() => {
+    if (activeTeamId) localStorage.setItem("activeTeamId", activeTeamId);
+  }, [activeTeamId]);
+
+  useEffect(() => {
+    if (activeChannelId) localStorage.setItem("activeChannelId", activeChannelId);
+  }, [activeChannelId]);
+
+  useEffect(() => {
+    dispatch(fetchCurrentUser());
+    dispatch(fetchAllData());
+  }, [dispatch]);
+
+  useEffect(() => {
+    fetch("/api/activity")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setActivityEvents(data.events);
+          setActivitySummary(data.summary);
+        }
+      });
+  }, []);
 
   const activeChat = chats.find(c => c.id === activeChatId) || null;
   const activeTeam = teams.find(t => t.id === activeTeamId) || null;
   const activeChannel = activeTeam?.channels.find(ch => ch.id === activeChannelId) || null;
 
-  useEffect(() => {
-    if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, unreadCount: 0 } : c));
-    }
-  }, [activeView, activeChatId]);
+  const [settingsRole, setSettingsRole] = useState("");
+  const [settingsStatusMsg, setSettingsStatusMsg] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<UserStatus>("online");
+  const [saving, setSaving] = useState(false);
+  const [showNewChatPicker, setShowNewChatPicker] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState("");
 
   useEffect(() => {
-    if (activeView === "teams" && activeChannelId && activeTeamId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedChannels = t.channels.map(ch =>
-            ch.id === activeChannelId ? { ...ch, unreadCount: 0 } : ch,
-          );
-          return { ...t, channels: updatedChannels };
-        }
-        return t;
-      }));
+    if (currentUser) {
+      setSettingsRole(currentUser.role);
+      setSettingsStatusMsg(currentUser.customStatus || "");
+      setSelectedStatus(currentUser.status);
     }
-  }, [activeView, activeChannelId, activeTeamId]);
+  }, [currentUser]);
 
   const handleViewChange = (view: string) => {
-    setActiveView(view);
+    dispatch(setActiveView(view));
     if (view !== "chat" && view !== "teams") {
-      setActiveThreadParent(null);
+      dispatch(setActiveThreadParent(null));
     }
   };
 
   const handleSelectChat = (chatId: string) => {
-    setActiveChatId(chatId);
-    setActiveView("chat");
+    dispatch(setActiveChatId(chatId));
+    dispatch(setActiveView("chat"));
   };
 
   const handleSelectChannel = (teamId: string, channelId: string) => {
-    setActiveTeamId(teamId);
-    setActiveChannelId(channelId);
-    setActiveView("teams");
+    dispatch(setActiveTeamId(teamId));
+    dispatch(setActiveChannelId(channelId));
+    dispatch(setActiveView("teams"));
   };
 
-  const handleSendMessage = (content: string, attachments?: Attachment[]) => {
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
-      content,
-      timestamp: new Date().toISOString(),
-      reactions: [],
-      attachments,
-    };
-
-    if (attachments && attachments.length > 0) {
-      const newFiles: FileItem[] = attachments.map(att => ({
-        id: `f-${Date.now()}-${att.id}`,
-        name: att.name,
-        type: (att.type as FileItem["type"]) || "pdf",
-        size: att.size,
-        uploadedBy: currentUser.name,
-        uploadedAt: new Date().toISOString(),
-        teamId: activeView === "teams" ? activeTeamId || undefined : undefined,
-        channelId: activeView === "teams" ? activeChannelId || undefined : undefined,
-      }));
-      setFiles(prev => [newFiles[0], ...prev]);
-    }
+  const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
+    if (!currentUser) return;
 
     if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => {
-        if (c.id === activeChatId) {
-          return { ...c, messages: [...c.messages, newMessage] };
-        }
-        return c;
-      }));
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, dmId: activeChatId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        dispatch(addMessage({ chatId: activeChatId, message: data.message }));
+      }
     } else if (activeView === "teams" && activeTeamId && activeChannelId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedCh = t.channels.map(ch => {
-            if (ch.id === activeChannelId) {
-              return { ...ch, messages: [...ch.messages, newMessage] };
-            }
-            return ch;
-          });
-          return { ...t, channels: updatedCh };
-        }
-        return t;
-      }));
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, channelId: activeChannelId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        dispatch(addMessage({ channelId: activeChannelId, message: data.message }));
+      }
     }
   };
 
-  const handleDeleteMessage = (messageId: string) => {
+  const handleDeleteMessage = async (messageId: string) => {
+    await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
     if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => {
-        if (c.id === activeChatId) {
-          return { ...c, messages: c.messages.filter(m => m.id !== messageId) };
-        }
-        return c;
-      }));
+      dispatch(deleteMessage({ chatId: activeChatId, messageId }));
     } else if (activeView === "teams" && activeTeamId && activeChannelId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedCh = t.channels.map(ch => {
-            if (ch.id === activeChannelId) {
-              return { ...ch, messages: ch.messages.filter(m => m.id !== messageId) };
-            }
-            return ch;
-          });
-          return { ...t, channels: updatedCh };
-        }
-        return t;
-      }));
+      dispatch(deleteMessage({ channelId: activeChannelId, messageId }));
     }
   };
 
   const handleSendReply = (parentMessageId: string, content: string) => {
+    if (!currentUser) return;
     const newReply: ThreadReply = {
       id: `reply-${Date.now()}`,
       messageId: parentMessageId,
@@ -187,90 +218,27 @@ export function Dashboard() {
       timestamp: new Date().toISOString(),
       reactions: [],
     };
-
-    setThreadReplies(prev => [...prev, newReply]);
-
-    const updateReplyCount = (msgs: Message[]) =>
-      msgs.map(m => m.id === parentMessageId ? { ...m, replyCount: (m.replyCount || 0) + 1 } : m);
-
-    if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: updateReplyCount(c.messages) } : c));
-    } else if (activeView === "teams" && activeTeamId && activeChannelId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedCh = t.channels.map(ch =>
-            ch.id === activeChannelId ? { ...ch, messages: updateReplyCount(ch.messages) } : ch
-          );
-          return { ...t, channels: updatedCh };
-        }
-        return t;
-      }));
-    }
-
-    if (activeThreadParent && activeThreadParent.id === parentMessageId) {
-      setActiveThreadParent(prev => prev ? { ...prev, replyCount: (prev.replyCount || 0) + 1 } : null);
-    }
+    dispatch(addReply(newReply));
   };
 
-  const handleAddReaction = (messageId: string, emoji: string) => {
-    const applyReaction = (reactions: Message["reactions"]) => {
-      const existing = reactions.find(r => r.emoji === emoji);
-      if (existing) {
-        if (existing.users.includes(currentUser.id)) {
-          const filteredUsers = existing.users.filter(uid => uid !== currentUser.id);
-          if (filteredUsers.length === 0) {
-            return reactions.filter(r => r.emoji !== emoji);
-          }
-          return reactions.map(r => r.emoji === emoji ? { ...r, count: r.count - 1, users: filteredUsers } : r);
-        } else {
-          return reactions.map(r => r.emoji === emoji ? { ...r, count: r.count + 1, users: [...r.users, currentUser.id] } : r);
-        }
-      } else {
-        return [...reactions, { emoji, count: 1, users: [currentUser.id] }];
-      }
-    };
-
-    if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => {
-        if (c.id === activeChatId) {
-          const updatedMsgs = c.messages.map(m =>
-            m.id === messageId ? { ...m, reactions: applyReaction(m.reactions) } : m
-          );
-          return { ...c, messages: updatedMsgs };
-        }
-        return c;
-      }));
-    } else if (activeView === "teams" && activeTeamId && activeChannelId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedCh = t.channels.map(ch => {
-            if (ch.id === activeChannelId) {
-              const updatedMsgs = ch.messages.map(m =>
-                m.id === messageId ? { ...m, reactions: applyReaction(m.reactions) } : m
-              );
-              return { ...ch, messages: updatedMsgs };
-            }
-            return ch;
-          });
-          return { ...t, channels: updatedCh };
-        }
-        return t;
-      }));
-    }
-
-    setThreadReplies(prev => prev.map(reply => {
-      if (reply.id === messageId) {
-        return { ...reply, reactions: applyReaction(reply.reactions) };
-      }
-      return reply;
+  const handleAddReaction = async (messageId: string, emoji: string) => {
+    if (!currentUser) return;
+    await fetch(`/api/messages/${messageId}/reactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+    dispatch(addReaction({
+      messageId,
+      emoji,
+      userId: currentUser.id,
+      chatId: activeView === "chat" ? activeChatId || undefined : undefined,
+      channelId: activeView === "teams" ? activeChannelId || undefined : undefined,
     }));
-
-    if (activeThreadParent && activeThreadParent.id === messageId) {
-      setActiveThreadParent(prev => prev ? { ...prev, reactions: applyReaction(prev.reactions) } : null);
-    }
   };
 
   const handleStartCall = (isVideo: boolean) => {
+    if (!currentUser) return;
     const mockMeeting: CalendarMeeting = {
       id: `meet-${Date.now()}`,
       title: activeView === "chat" ? `Sync Call with ${activeChat?.name}` : `Sync Call in #${activeChannel?.name}`,
@@ -279,13 +247,13 @@ export function Dashboard() {
       startTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
       endTime: "",
       description: "Ad-hoc video call initiated inside conversation thread.",
-      attendees: [currentUser.name, ...USERS.filter(u => u.id !== currentUser.id).slice(0, 2).map(u => u.name)],
+      attendees: [currentUser.name, ...allUsers.filter((u) => u.id !== currentUser.id).slice(0, 2).map((u) => u.name)],
     };
-    setActiveMeeting(mockMeeting);
+    dispatch(setActiveMeeting(mockMeeting));
   };
 
   const handleJoinMeeting = (meeting: CalendarMeeting) => {
-    setActiveMeeting(meeting);
+    dispatch(setActiveMeeting(meeting));
   };
 
   const handleLeaveCall = () => {
@@ -301,47 +269,25 @@ export function Dashboard() {
     };
 
     if (activeView === "chat" && activeChatId) {
-      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: [...c.messages, sysMsg] } : c));
-    } else if (activeView === "teams" && activeTeamId && activeChannelId) {
-      setTeams(prev => prev.map(t => {
-        if (t.id === activeTeamId) {
-          const updatedCh = t.channels.map(ch =>
-            ch.id === activeChannelId ? { ...ch, messages: [...ch.messages, sysMsg] } : ch
-          );
-          return { ...t, channels: updatedCh };
-        }
-        return t;
-      }));
+      dispatch(addMessage({ chatId: activeChatId, message: sysMsg }));
     }
-
-    setActiveMeeting(null);
+    dispatch(setActiveMeeting(null));
   };
 
-  const handleAddMeeting = (meetDetails: Omit<CalendarMeeting, "id">) => {
-    const newMeet: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      ...meetDetails,
-    };
-    setMeetings(prev => [...prev, newMeet]);
-  };
-
-  const handleUploadFile = (name: string, type: FileItem["type"], size: string) => {
-    const newFile: FileItem = {
-      id: `f-${Date.now()}`,
-      name,
-      type,
-      size,
-      uploadedBy: currentUser.name,
-      uploadedAt: new Date().toISOString(),
-    };
-    setFiles(prev => [newFile, ...prev]);
-  };
-
-  const handleDeleteFile = (fileId: string) => {
-    setFiles(prev => prev.filter(f => f.id !== fileId));
+  const handleSaveSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await dispatch(updateUser({
+      status: selectedStatus,
+      role: settingsRole,
+      customStatus: settingsStatusMsg,
+    }));
+    setSaving(false);
+    dispatch(setShowSettingsModal(false));
   };
 
   const handleDialCall = (userName: string, isVideo: boolean) => {
+    if (!currentUser) return;
     const mockMeeting: CalendarMeeting = {
       id: `meet-${Date.now()}`,
       title: `Outgoing Call: ${userName}`,
@@ -352,47 +298,144 @@ export function Dashboard() {
       description: "Speed dial phone sync.",
       attendees: [currentUser.name, userName],
     };
-    setActiveMeeting(mockMeeting);
+    dispatch(setActiveMeeting(mockMeeting));
   };
 
-  const handleSaveSettings = (e: FormEvent) => {
-    e.preventDefault();
-    setShowSettingsModal(false);
-  };
+  const handleAddMeeting = async (meetDetails: Omit<CalendarMeeting, "id">) => {
+    const startDateTime = `${meetDetails.date}T${meetDetails.startTime}:00`;
+    const endDateTime = `${meetDetails.date}T${meetDetails.endTime}:00`;
 
-  const handleUpdateStatus = (status: UserStatus) => {};
+    const res = await fetch("/api/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: meetDetails.title,
+        description: meetDetails.description,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        attendees: [],
+      }),
+    });
 
-  const handleNewChatTrigger = () => {
-    const randomUser = USERS.filter(u => u.id !== currentUser.id)[Math.floor(Math.random() * 4)];
-    const existing = chats.find(c => c.type === "direct" && c.participants.some(p => p.id === randomUser.id));
-    if (existing) {
-      setActiveChatId(existing.id);
-      setActiveView("chat");
-    } else {
-      const newId = `chat-${Date.now()}`;
-      const newChat: Chat = {
-        id: newId,
-        name: randomUser.name,
-        type: "direct",
-        participants: [currentUser, randomUser],
-        unreadCount: 0,
-        messages: [],
+    if (res.ok) {
+      const data = await res.json();
+      const newMeet: CalendarMeeting = {
+        id: data.event.id,
+        ...meetDetails,
       };
-      setChats(prev => [newChat, ...prev]);
-      setActiveChatId(newId);
-      setActiveView("chat");
+      dispatch(addMeeting(newMeet));
     }
   };
 
+  const handleAddTask = async (taskDetails: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
+    const firstTeam = teams[0];
+    if (!firstTeam) return;
+
+    const dueDateTime = taskDetails.dueTime
+      ? `${taskDetails.dueDate}T${taskDetails.dueTime}:00`
+      : `${taskDetails.dueDate}T12:00:00`;
+
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: taskDetails.title,
+        description: taskDetails.description,
+        priority: taskDetails.priority,
+        dueDate: dueDateTime,
+        teamId: firstTeam.id,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const newTask: CalendarTask = {
+        id: data.task.id,
+        title: data.task.title,
+        date: taskDetails.dueDate,
+        time: taskDetails.dueTime,
+        status: data.task.status,
+        priority: data.task.priority,
+        assigneeName: null,
+      };
+      dispatch(addTask(newTask));
+    }
+  };
+
+  const handleUploadFile = (name: string, type: FileItem["type"], size: string) => {
+    const newFile: FileItem = {
+      id: `f-${Date.now()}`,
+      name,
+      type,
+      size,
+      uploadedBy: currentUser?.name || "Unknown",
+      uploadedAt: new Date().toISOString(),
+    };
+    // Dispatch to data slice for persistence
+  };
+
+  const handleDeleteFile = (fileId: string) => {
+    // Dispatch to data slice for persistence
+  };
+
+  const handleNewChatTrigger = () => {
+    setShowNewChatPicker(true);
+  };
+
+  const handleStartNewChat = async (otherUserId: string) => {
+    if (!currentUser) return;
+    setShowNewChatPicker(false);
+    setNewChatSearch("");
+
+    const res = await fetch("/api/chats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otherUserId }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const chat: Chat = {
+        id: data.chat.id,
+        name: data.chat.name,
+        type: data.chat.type,
+        participants: data.chat.participants,
+        unreadCount: 0,
+        messages: data.chat.messages.map((m: any) => ({
+          id: m.id,
+          senderId: m.senderId,
+          senderName: m.senderName,
+          senderAvatar: m.senderAvatar,
+          content: m.content,
+          timestamp: m.timestamp,
+          reactions: m.reactions,
+          replyCount: m.replyCount,
+        })),
+      };
+      dispatch(addChat(chat));
+      dispatch(setActiveChatId(chat.id));
+      dispatch(setActiveView("chat"));
+    }
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="w-full h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+      </div>
+    );
+  }
+
   return (
-    <div id="enterprise-workspace-canvas" className="w-full h-screen bg-[#0B0F19] text-white flex overflow-hidden font-sans">
+    <div id="enterprise-workspace-canvas" className="w-full h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex overflow-hidden font-sans">
       <SidebarNav
         activeView={activeView}
         onViewChange={handleViewChange}
         currentUser={currentUser}
-        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenSettings={() => dispatch(setShowSettingsModal(true))}
         theme={theme}
-        onToggleTheme={() => setTheme(prev => prev === "dark" ? "light" : "dark")}
+        onToggleTheme={() => dispatch(toggleTheme())}
+        badges={badges}
       />
 
       {activeMeeting ? (
@@ -411,14 +454,16 @@ export function Dashboard() {
             activeChannelId={activeChannelId}
             meetings={meetings}
             files={files}
+            currentUserId={currentUser.id}
+            allUsers={allUsers}
             onSelectChat={handleSelectChat}
             onSelectChannel={handleSelectChannel}
-            onSelectFileView={setActiveFileView}
+            onSelectFileView={(v) => dispatch(setActiveFileView(v))}
             onJoinMeeting={handleJoinMeeting}
             onNewChat={handleNewChatTrigger}
-            onNewMeeting={() => { setActiveView("calendar"); }}
+            onNewMeeting={() => dispatch(setActiveView("calendar"))}
             onDialCall={handleDialCall}
-            onSelectMeeting={setSelectedMeetingId}
+            onSelectMeeting={(id) => dispatch(setSelectedMeetingId(id))}
           />
 
           <div id="main-content-canvas" className="flex-1 flex overflow-hidden min-w-0 h-full relative">
@@ -429,7 +474,7 @@ export function Dashboard() {
                 activeTeam={activeTeam}
                 activeChannel={activeChannel}
                 onSendMessage={handleSendMessage}
-                onOpenThread={setActiveThreadParent}
+                onOpenThread={(m) => dispatch(setActiveThreadParent(m))}
                 onAddReaction={handleAddReaction}
                 onStartCall={handleStartCall}
                 onDeleteMessage={handleDeleteMessage}
@@ -439,7 +484,9 @@ export function Dashboard() {
             {activeView === "calendar" && (
               <CalendarView
                 meetings={meetings}
+                tasks={tasks}
                 onAddMeeting={handleAddMeeting}
+                onAddTask={handleAddTask}
                 onJoinMeeting={handleJoinMeeting}
                 selectedMeetingId={selectedMeetingId}
               />
@@ -453,66 +500,70 @@ export function Dashboard() {
               />
             )}
 
+            {activeView === "people" && (
+              <PeopleView currentUserId={currentUser.id} />
+            )}
+
             {activeView === "activity" && (
-              <div className="flex-1 bg-[#0B0F19] p-8 md:p-12 overflow-y-auto flex flex-col justify-start h-full">
+              <div className="flex-1 bg-[var(--bg-primary)] p-8 md:p-12 overflow-y-auto flex flex-col justify-start h-full">
                 <div className="max-w-4xl w-full mx-auto space-y-8">
                   <div className="space-y-2">
-                    <h1 className="text-2xl font-bold tracking-tight text-white">
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
                       Welcome back, {currentUser.name}
                     </h1>
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-[var(--text-secondary)]">
                       Here is an overview of your team&apos;s workspace activity today.
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div className="p-5 rounded-2xl bg-[#111827] border border-[#374151] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
+                    <div className="p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-gray-400 font-mono uppercase tracking-wider">Schedule</span>
+                          <span className="text-xs font-semibold text-[var(--text-secondary)] font-mono uppercase tracking-wider">Schedule</span>
                           <Calendar className="w-5 h-5 text-indigo-400" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mt-3">{meetings.length} Meetings</h3>
-                        <p className="text-xs text-gray-400 mt-1">Scheduled for this week</p>
+                        <h3 className="text-2xl font-bold text-[var(--text-primary)] mt-3">{activitySummary.meetingsCount} Meetings</h3>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1">On your calendar</p>
                       </div>
                       <button
-                        onClick={() => setActiveView("calendar")}
+                        onClick={() => dispatch(setActiveView("calendar"))}
                         className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold text-left flex items-center gap-1 group/btn mt-4 cursor-pointer"
                       >
                         View Calendar &rarr;
                       </button>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#111827] border border-[#374151] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
+                    <div className="p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-gray-400 font-mono uppercase tracking-wider">Unreads</span>
+                          <span className="text-xs font-semibold text-[var(--text-secondary)] font-mono uppercase tracking-wider">Unreads</span>
                           <MessageSquare className="w-5 h-5 text-indigo-400" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mt-3">
-                          {chats.reduce((acc, c) => acc + c.unreadCount, 0) + teams.reduce((acc, t) => acc + t.channels.reduce((sum, ch) => sum + ch.unreadCount, 0), 0)} Messages
+                        <h3 className="text-2xl font-bold text-[var(--text-primary)] mt-3">
+                          {activitySummary.unreadCount} Messages
                         </h3>
-                        <p className="text-xs text-gray-400 mt-1">Awaiting your response</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1">Awaiting your response</p>
                       </div>
                       <button
-                        onClick={() => setActiveView("chat")}
+                        onClick={() => dispatch(setActiveView("chat"))}
                         className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold text-left flex items-center gap-1 group/btn mt-4 cursor-pointer"
                       >
                         Open Chats &rarr;
                       </button>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-[#111827] border border-[#374151] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
+                    <div className="p-5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] flex flex-col justify-between h-[160px] group hover:border-gray-500 transition-all duration-200">
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-gray-400 font-mono uppercase tracking-wider">Shared Space</span>
+                          <span className="text-xs font-semibold text-[var(--text-secondary)] font-mono uppercase tracking-wider">Shared Space</span>
                           <HardDrive className="w-5 h-5 text-indigo-400" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mt-3">{files.length} Shared Files</h3>
-                        <p className="text-xs text-gray-400 mt-1">Stored in Cloud Drive</p>
+                        <h3 className="text-2xl font-bold text-[var(--text-primary)] mt-3">{activitySummary.filesCount} Shared Files</h3>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1">In your workspace</p>
                       </div>
                       <button
-                        onClick={() => setActiveView("files")}
+                        onClick={() => dispatch(setActiveView("files"))}
                         className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold text-left flex items-center gap-1 group/btn mt-4 cursor-pointer"
                       >
                         Access files &rarr;
@@ -520,32 +571,46 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-[#111827] border border-[#374151] rounded-2xl p-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-white tracking-tight">Recent Live Activity</h3>
+                  <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">Recent Live Activity</h3>
                     <div className="h-[1px] bg-[#374151]/50" />
 
                     <div className="space-y-3.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-gray-300">Daily Standup Sync is currently scheduled</span>
-                        </div>
-                        <span className="text-gray-500 font-mono">Active Slot</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                          <span className="text-gray-300">Sarah Chen updated the component guidelines</span>
-                        </div>
-                        <span className="text-gray-500 font-mono">15m ago</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                          <span className="text-gray-300">Marcus Vance shared design specifications</span>
-                        </div>
-                        <span className="text-gray-500 font-mono">2h ago</span>
-                      </div>
+                      {activityEvents.length === 0 && (
+                        <p className="text-xs text-[var(--text-secondary)]">No recent activity yet. Start collaborating to see events here.</p>
+                      )}
+                      {activityEvents.map((ev) => {
+                        const colorMap: Record<string, string> = {
+                          message_sent: "bg-indigo-500",
+                          file_uploaded: "bg-emerald-500",
+                          meeting_created: "bg-amber-500",
+                          friend_accepted: "bg-rose-500",
+                          status_changed: "bg-blue-500",
+                          team_joined: "bg-violet-500",
+                          channel_created: "bg-cyan-500",
+                        };
+                        const labelMap: Record<string, string> = {
+                          message_sent: "sent a message",
+                          file_uploaded: `uploaded "${ev.metadata?.fileName || "a file"}"`,
+                          meeting_created: "created a meeting",
+                          friend_accepted: `connected with ${ev.metadata?.friendName || "someone"}`,
+                          status_changed: "updated their status",
+                          team_joined: "joined a team",
+                          channel_created: "created a channel",
+                        };
+                        const dotColor = colorMap[ev.type] || "bg-gray-500";
+                        const label = labelMap[ev.type] || ev.type.replace(/_/g, " ");
+                        const timeAgo = formatTimeAgo(ev.createdAt);
+                        return (
+                          <div key={ev.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                              <span className="text-[var(--text-primary)]">{ev.userName} {label}</span>
+                            </div>
+                            <span className="text-gray-500 font-mono">{timeAgo}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -553,17 +618,17 @@ export function Dashboard() {
             )}
 
             {activeView === "settings" && (
-              <div className="flex-1 bg-[#0B0F19] p-8 overflow-y-auto max-w-3xl mx-auto flex flex-col justify-center">
-                <div className="bg-[#111827] border border-[#374151] rounded-2xl p-6 space-y-4">
-                  <h3 className="text-base font-bold text-white">General User Profile Preferences</h3>
+              <div className="flex-1 bg-[var(--bg-primary)] p-8 overflow-y-auto max-w-3xl mx-auto flex flex-col justify-center">
+                <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl p-6 space-y-4">
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">General User Profile Preferences</h3>
                   <div className="h-[1px] bg-[#374151]/50" />
                   <div className="space-y-1">
-                    <p className="text-xs text-gray-400">Username: <span className="text-white font-bold">{currentUser.name}</span></p>
-                    <p className="text-xs text-gray-400">Role: <span className="text-white font-bold">{currentUser.role}</span></p>
-                    <p className="text-xs text-gray-400">Status message: <span className="text-indigo-300 italic">{currentUser.customStatus || "Not set"}</span></p>
+                    <p className="text-xs text-[var(--text-secondary)]">Username: <span className="text-[var(--text-primary)] font-bold">{currentUser.name}</span></p>
+                    <p className="text-xs text-[var(--text-secondary)]">Role: <span className="text-[var(--text-primary)] font-bold">{currentUser.role}</span></p>
+                    <p className="text-xs text-[var(--text-secondary)]">Status message: <span className="text-indigo-300 italic">{currentUser.customStatus || "Not set"}</span></p>
                   </div>
                   <button
-                    onClick={() => setShowSettingsModal(true)}
+                    onClick={() => dispatch(setShowSettingsModal(true))}
                     className="bg-[#6366F1] text-white px-4 py-2 rounded-xl text-xs font-bold"
                   >
                     Edit Workspace Details
@@ -577,7 +642,7 @@ export function Dashboard() {
                 currentUser={currentUser}
                 parentMessage={activeThreadParent}
                 replies={threadReplies}
-                onClose={() => setActiveThreadParent(null)}
+                onClose={() => dispatch(setActiveThreadParent(null))}
                 onSendReply={handleSendReply}
                 onAddReaction={handleAddReaction}
               />
@@ -588,12 +653,12 @@ export function Dashboard() {
 
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111827] border border-[#374151] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
-            <div className="h-12 bg-[#1F2937] px-4 flex items-center justify-between border-b border-[#374151]">
-              <h3 className="text-sm font-bold text-white">Edit Profile & Workspace Status</h3>
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+            <div className="h-12 bg-[var(--bg-tertiary)] px-4 flex items-center justify-between border-b border-[var(--border-color)]">
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">Edit Profile & Workspace Status</h3>
               <button
-                onClick={() => setShowSettingsModal(false)}
-                className="text-gray-400 hover:text-white font-bold text-lg"
+                onClick={() => dispatch(setShowSettingsModal(false))}
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-lg"
               >
                 &times;
               </button>
@@ -601,19 +666,19 @@ export function Dashboard() {
 
             <form onSubmit={handleSaveSettings} className="p-5 space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Presence Status</label>
+                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">Presence Status</label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {(["online", "busy", "away", "offline"] as UserStatus[]).map((st) => {
-                    const active = currentUser.status === st;
+                    const active = selectedStatus === st;
                     return (
                       <button
                         key={st}
                         type="button"
-                        onClick={() => handleUpdateStatus(st)}
+                        onClick={() => setSelectedStatus(st)}
                         className={`py-1.5 rounded-lg text-[10px] font-bold uppercase border tracking-wider transition-all ${
                           active
                             ? "bg-indigo-500/10 border-indigo-500 text-indigo-400"
-                            : "bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white"
+                            : "bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                         }`}
                       >
                         {st}
@@ -624,42 +689,101 @@ export function Dashboard() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Enterprise Title / Role</label>
+                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">Enterprise Title / Role</label>
                 <input
                   type="text"
                   value={settingsRole}
                   onChange={(e) => setSettingsRole(e.target.value)}
-                  className="w-full bg-[#1F2937] text-white text-xs rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                  className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs rounded-xl px-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Custom status description</label>
+                <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">Custom status description</label>
                 <input
                   type="text"
                   placeholder="Coding a beautiful Teams clone..."
                   value={settingsStatusMsg}
                   onChange={(e) => setSettingsStatusMsg(e.target.value)}
-                  className="w-full bg-[#1F2937] text-white text-xs rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                  className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs rounded-xl px-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
                 />
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-[#374151]/50">
+              <div className="flex gap-2 pt-2 border-t border-[var(--border-color)]">
                 <button
                   type="button"
-                  onClick={() => setShowSettingsModal(false)}
-                  className="flex-1 bg-transparent text-gray-400 hover:text-white py-2 rounded-xl border border-[#374151] text-xs font-semibold transition-all"
+                  onClick={() => dispatch(setShowSettingsModal(false))}
+                  className="flex-1 bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-[#6366F1] hover:bg-[#5053e1] text-white py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-950/40"
+                  disabled={saving}
+                  className="flex-1 bg-[#6366F1] hover:bg-[#5053e1] disabled:opacity-60 disabled:cursor-not-allowed text-white py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-950/40 flex items-center justify-center gap-2"
                 >
-                  Save Preferences
+                  {saving && (
+                    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  {saving ? "Saving..." : "Save Preferences"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showNewChatPicker && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="h-12 bg-[var(--bg-tertiary)] px-4 flex items-center justify-between border-b border-[var(--border-color)]">
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">New Chat</h3>
+              <button onClick={() => { setShowNewChatPicker(false); setNewChatSearch(""); }} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-lg">&times;</button>
+            </div>
+            <div className="p-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search people..."
+                  value={newChatSearch}
+                  onChange={(e) => setNewChatSearch(e.target.value)}
+                  className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder-gray-500 text-xs rounded-xl pl-9 pr-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-3 pb-3 max-h-72 overflow-y-auto space-y-0.5">
+              {allUsers
+                .filter((u) => u.id !== currentUser?.id)
+                .filter((u) => !newChatSearch || u.name.toLowerCase().includes(newChatSearch.toLowerCase()))
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => handleStartNewChat(u.id)}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--bg-tertiary)] transition-all text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#374151] text-white font-semibold text-xs flex items-center justify-center flex-shrink-0">
+                      {u.avatar || u.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{u.name}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] truncate">{u.email}</p>
+                    </div>
+                  </button>
+                ))}
+              {allUsers.filter((u) => u.id !== currentUser?.id).length === 0 && (
+                <p className="text-xs text-[var(--text-secondary)] text-center py-6">No other users found. Share this app with others!</p>
+              )}
+              {allUsers.filter((u) => u.id !== currentUser?.id).length > 0 &&
+                newChatSearch &&
+                allUsers.filter((u) => u.id !== currentUser?.id).filter((u) => u.name.toLowerCase().includes(newChatSearch.toLowerCase())).length === 0 && (
+                <p className="text-xs text-[var(--text-secondary)] text-center py-6">No users match "{newChatSearch}"</p>
+              )}
+            </div>
           </div>
         </div>
       )}

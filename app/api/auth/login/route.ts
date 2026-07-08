@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     const token = await createSession(user.id);
-    const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name } });
+    const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, phoneNumber: user.phoneNumber } });
     response.cookies.set("session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

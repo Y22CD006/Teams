@@ -87,6 +87,28 @@ export interface CalendarMeeting {
   isLive?: boolean;
 }
 
+export type CalendarViewType = 'month' | 'week' | 'day';
+
+export interface CalendarTask {
+  id: string;
+  title: string;
+  date: string;
+  time?: string;
+  status: string;
+  priority: string;
+  assigneeName: string | null;
+}
+
+export type CalendarItem = CalendarMeeting | CalendarTask;
+
+export function isMeeting(item: CalendarItem): item is CalendarMeeting {
+  return 'organizer' in item;
+}
+
+export function isTask(item: CalendarItem): item is CalendarTask {
+  return 'status' in item;
+}
+
 export interface FileItem {
   id: string;
   name: string;

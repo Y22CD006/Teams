@@ -45,15 +45,15 @@ export const ThreadPanel = ({
   if (!parentMessage) return null;
 
   return (
-    <div id="thread-sidebar-panel" className="w-[320px] bg-[#111827] border-l border-[#374151] flex flex-col flex-shrink-0 z-10 h-full">
-      <div className="h-14 border-b border-[#374151] px-4 flex items-center justify-between bg-[#111827] flex-shrink-0">
+    <div id="thread-sidebar-panel" className="w-[320px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col flex-shrink-0 z-10 h-full">
+      <div className="h-14 border-b border-[var(--border-color)] px-4 flex items-center justify-between bg-[var(--bg-secondary)] flex-shrink-0">
         <div>
-          <h3 className="text-sm font-semibold text-white">Thread replies</h3>
-          <p className="text-[10px] text-gray-400 font-mono">Conversational thread</p>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Thread replies</h3>
+          <p className="text-[10px] text-[var(--text-secondary)] font-mono">Conversational thread</p>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-white hover:bg-[#1F2937] p-1.5 rounded-lg transition-colors"
+          className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#1F2937] p-1.5 rounded-lg transition-colors"
           title="Close Thread"
         >
           <X className="w-4 h-4" />
@@ -61,17 +61,17 @@ export const ThreadPanel = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="p-3 rounded-xl bg-[#1F2937]/45 border border-[#374151]/70">
+        <div className="p-3 rounded-xl bg-[var(--bg-tertiary)]/45 border border-[var(--border-color)]">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-950 text-indigo-300 font-bold text-xs flex items-center justify-center border border-[#374151]">
+            <div className="w-7 h-7 rounded-lg bg-indigo-950 text-indigo-300 font-bold text-xs flex items-center justify-center border border-[var(--border-color)]">
               {parentMessage.senderAvatar}
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-xs font-bold text-white truncate leading-tight">{parentMessage.senderName}</h4>
+              <h4 className="text-xs font-bold text-[var(--text-primary)] truncate leading-tight">{parentMessage.senderName}</h4>
               <p className="text-[9px] text-gray-500 font-mono mt-0.5">Original Poster</p>
             </div>
           </div>
-          <p className="text-xs text-gray-300 mt-2.5 leading-relaxed break-words whitespace-pre-wrap select-text">
+          <p className="text-xs text-[var(--text-primary)] mt-2.5 leading-relaxed break-words whitespace-pre-wrap select-text">
             {parentMessage.content}
           </p>
         </div>
@@ -85,27 +85,27 @@ export const ThreadPanel = ({
         <div className="space-y-3.5">
           {filteredReplies.length === 0 ? (
             <div className="py-4 text-center select-none">
-              <p className="text-xs text-gray-400">No replies yet.</p>
+              <p className="text-xs text-[var(--text-secondary)]">No replies yet.</p>
               <p className="text-[10px] text-gray-500 mt-0.5">Be the first to leave a comment below.</p>
             </div>
           ) : (
             filteredReplies.map((reply) => (
               <div key={reply.id} className="flex gap-2.5 items-start">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-900/40 text-indigo-200 font-bold text-[10px] flex items-center justify-center border border-[#374151]">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-900/40 text-indigo-200 font-bold text-[10px] flex items-center justify-center border border-[var(--border-color)]">
                     {reply.senderAvatar}
                   </div>
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-1.5">
-                    <span className="text-xs font-bold text-white truncate">{reply.senderName}</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">{reply.senderName}</span>
                     <span className="text-[9px] text-gray-500 font-mono flex-shrink-0">
                       {new Date(reply.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   
-                  <p className="text-xs text-gray-300 mt-1 leading-relaxed break-words whitespace-pre-wrap select-text">
+                  <p className="text-xs text-[var(--text-primary)] mt-1 leading-relaxed break-words whitespace-pre-wrap select-text">
                     {reply.content}
                   </p>
 
@@ -118,7 +118,7 @@ export const ThreadPanel = ({
                           className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-medium transition-all ${
                             react.users.includes(currentUser.id)
                               ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 font-semibold'
-                              : 'bg-[#1F2937]/40 border-[#374151] text-gray-400 hover:border-gray-500'
+                              : 'bg-[var(--bg-tertiary)]/40 border-[var(--border-color)] text-[var(--text-secondary)] hover:border-gray-500'
                           }`}
                         >
                           <span>{react.emoji}</span>
@@ -135,8 +135,8 @@ export const ThreadPanel = ({
         </div>
       </div>
 
-      <div className="p-3 bg-[#111827] border-t border-[#374151] flex-shrink-0">
-        <div className="flex items-center bg-[#1F2937] border border-[#374151] rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-[#6366F1] focus-within:border-[#6366F1] transition-all">
+      <div className="p-3 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex-shrink-0">
+        <div className="flex items-center bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-[#6366F1] focus-within:border-[#6366F1] transition-all">
           <input
             id="thread-reply-input-field"
             type="text"
@@ -144,7 +144,7 @@ export const ThreadPanel = ({
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={handleKeyPress}
-            className="flex-1 bg-transparent text-white placeholder-gray-400 text-xs focus:outline-none py-1"
+            className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-gray-400 text-xs focus:outline-none py-1"
           />
           <button
             onClick={handleSend}
