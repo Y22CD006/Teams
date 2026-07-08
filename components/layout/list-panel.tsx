@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Hash, Lock, PhoneCall, Video, Star, FileText, UserPlus, Clock, ChevronDown, ChevronRight, BellRing, Settings as SettingsIcon, Check, X, UserCheck, UserX, Loader2, Trash2, Edit3 } from 'lucide-react';
+import { Search, Plus, Hash, Lock, PhoneCall, Video, Star, FileText, UserPlus, Clock, ChevronDown, ChevronRight, BellRing, Settings as SettingsIcon, Check, X, UserCheck, UserX, Loader2, Trash2, Edit3, Filter, Edit, MoreHorizontal } from 'lucide-react';
 import { Chat, Team, CalendarMeeting, FileItem, User } from '@/lib/types';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { CreateChannelModal } from '@/components/teams/create-channel-modal';
@@ -73,6 +73,8 @@ export const ListPanel = ({
     'team-1': true,
     'team-2': true,
   });
+  const [expandedPinned, setExpandedPinned] = useState(true);
+  const [expandedRecent, setExpandedRecent] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -215,17 +217,24 @@ export const ListPanel = ({
         );
       case 'chat':
         return (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight">Chats</h2>
-            <button 
-              id="btn-new-chat"
-              onClick={onNewChat}
-              className="bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[#2e3748] transition-all flex items-center gap-1"
-              title="New Chat"
-            >
-              <Plus className="w-4 h-4 text-[#6366F1]" />
-              <span className="text-xs font-medium pr-1">New</span>
-            </button>
+          <div className="flex items-center justify-between px-4 py-3">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Chat</h2>
+            <div className="flex items-center gap-1">
+              <button 
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
+                title="Filter"
+              >
+                <Filter className="w-4 h-4" />
+              </button>
+              <button 
+                id="btn-new-chat"
+                onClick={onNewChat}
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
+                title="New Chat"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         );
       case 'teams':
@@ -351,54 +360,101 @@ export const ListPanel = ({
         )}
 
         {activeView === 'chat' && (
-          <div className="space-y-0.5">
-            {filteredChats.map((chat) => {
-              const active = activeChatId === chat.id;
-              const targetUser = chat.participants.find((u) => u.id !== currentUserId) || allUsers[0];
-              const lastMsg = chat.messages[chat.messages.length - 1];
-
-              return (
-                <div
-                  key={chat.id}
-                  id={`chat-item-${chat.id}`}
-                  onClick={() => onSelectChat(chat.id)}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-150 border border-transparent ${
-                    active 
-                      ? 'bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)] shadow-md' 
-                      : 'text-[var(--text-primary)] hover:bg-[#1F2937]/55 hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-9 h-9 rounded-lg bg-[#374151] text-white font-semibold text-xs flex items-center justify-center border border-[#1F2937]">
-                      {chat.type === 'direct' ? targetUser.avatar : chat.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    {chat.type === 'direct' && (
-                      <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#111827] ${getStatusColor(targetUser.status)}`} />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-semibold truncate text-[var(--text-primary)] leading-tight">
-                        {chat.name}
-                      </h4>
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        {lastMsg ? lastMsg.timestamp.split('T')[1].substring(0, 5) : ''}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
-                      {lastMsg ? `${lastMsg.senderId === currentUserId ? 'You: ' : ''}${lastMsg.content}` : 'No messages'}
-                    </p>
-                  </div>
-
-                  {chat.unreadCount > 0 && !active && (
-                    <span className="bg-[#6366F1] text-white font-bold text-[10px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1 shadow-sm">
-                      {chat.unreadCount}
-                    </span>
-                  )}
+          <div className="space-y-2 pb-4">
+            {/* Pinned Section */}
+            <div className="group/section">
+              <div
+                onClick={() => setExpandedPinned(!expandedPinned)}
+                className="flex items-center gap-1.5 px-3 py-1 hover:bg-[var(--bg-tertiary)]/30 cursor-pointer rounded-lg transition-colors"
+              >
+                {expandedPinned ? <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-secondary)]" />}
+                <span className="text-xs font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Pinned</span>
+              </div>
+              {expandedPinned && (
+                <div className="space-y-[2px] mt-1">
+                  <p className="text-[11px] text-[var(--text-secondary)] px-8 py-1.5">No pinned chats</p>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            {/* Recent Section */}
+            <div className="group/section">
+              <div
+                onClick={() => setExpandedRecent(!expandedRecent)}
+                className="flex items-center gap-1.5 px-3 py-1 hover:bg-[var(--bg-tertiary)]/30 cursor-pointer rounded-lg transition-colors"
+              >
+                {expandedRecent ? <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-secondary)]" />}
+                <span className="text-xs font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Recent</span>
+              </div>
+              {expandedRecent && (
+                <div className="space-y-[2px] mt-1 px-1.5">
+                  {filteredChats.map((chat) => {
+                    const active = activeChatId === chat.id;
+                    const targetUser = chat.participants.find((u) => u.id !== currentUserId) || allUsers[0];
+                    const lastMsg = chat.messages[chat.messages.length - 1];
+                    const hasUnread = chat.unreadCount > 0;
+
+                    return (
+                      <div
+                        key={chat.id}
+                        id={`chat-item-${chat.id}`}
+                        onClick={() => onSelectChat(chat.id)}
+                        className={`group/chatitem flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all duration-75 relative ${
+                          active 
+                            ? 'bg-white dark:bg-[#292929] shadow-sm' 
+                            : 'hover:bg-[#F3F2F1] dark:hover:bg-[#292929]'
+                        }`}
+                      >
+                        {/* Active Selection Indicator */}
+                        {active && (
+                          <div className="absolute left-0 top-[20%] bottom-[20%] w-0.5 bg-[#5B5FC7] dark:bg-[#7977F7] rounded-r-full" />
+                        )}
+
+                        <div className="relative flex-shrink-0 ml-1">
+                          <div className="w-9 h-9 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-xs flex items-center justify-center overflow-hidden">
+                            {chat.type === 'direct' ? (targetUser.avatar || targetUser.name.charAt(0)) : chat.name.charAt(0)}
+                          </div>
+                          {chat.type === 'direct' && (
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[var(--bg-secondary)] dark:border-[#292929] ${getStatusColor(targetUser.status)}`} />
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 pr-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`text-sm truncate text-[var(--text-primary)] leading-tight ${hasUnread ? 'font-bold' : 'font-semibold'}`}>
+                              {chat.name}
+                            </h4>
+                            <span className={`text-[11px] font-mono pl-2 flex-shrink-0 ${hasUnread ? 'font-bold text-[#5B5FC7] dark:text-[#7977F7]' : 'text-[var(--text-secondary)]'}`}>
+                              {lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-0.5">
+                            <p className={`text-xs truncate ${hasUnread ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                              {lastMsg ? `${lastMsg.senderId === currentUserId ? 'You: ' : ''}${lastMsg.content}` : 'No messages'}
+                            </p>
+                            
+                            <div className="flex items-center opacity-0 group-hover/chatitem:opacity-100 transition-opacity flex-shrink-0 pl-1">
+                              <button className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-0.5 rounded hover:bg-[var(--bg-tertiary)]" title="More options">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            {hasUnread && !active && (
+                              <div className="flex-shrink-0 ml-1 opacity-100 group-hover/chatitem:hidden">
+                                <span className="bg-[#5B5FC7] dark:bg-[#7977F7] text-white font-bold text-[10px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+                                  {chat.unreadCount}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
