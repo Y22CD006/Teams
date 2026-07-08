@@ -10,7 +10,7 @@ import { MeetingView } from "@/components/meetings/meeting-view";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
 import { PeopleView } from "@/components/people/people-view";
-import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, FileItem, Attachment, UserStatus } from "@/lib/types";
+import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, CalendarTask, FileItem, Attachment, UserStatus } from "@/lib/types";
 import { useAppSelector, useAppDispatch } from "@/lib/store/hooks";
 import {
   fetchCurrentUser, updateUser,
@@ -23,6 +23,7 @@ import {
 import {
   fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
   addTeam, addChannel, removeTeam, removeChannel,
+  addMeeting, addTask,
 } from "@/lib/store/dataSlice";
 
 function formatTimeAgo(iso: string): string {
@@ -52,6 +53,7 @@ export function Dashboard() {
   const chats = useAppSelector((s) => s.data.chats);
   const teams = useAppSelector((s) => s.data.teams);
   const meetings = useAppSelector((s) => s.data.meetings);
+  const tasks = useAppSelector((s) => s.data.tasks);
   const files = useAppSelector((s) => s.data.files);
   const threadReplies = useAppSelector((s) => s.data.threadReplies);
   const allUsers = useAppSelector((s) => s.data.allUsers);
@@ -299,12 +301,65 @@ export function Dashboard() {
     dispatch(setActiveMeeting(mockMeeting));
   };
 
-  const handleAddMeeting = (meetDetails: Omit<CalendarMeeting, "id">) => {
-    const newMeet: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      ...meetDetails,
-    };
-    // Dispatch to data slice for persistence
+  const handleAddMeeting = async (meetDetails: Omit<CalendarMeeting, "id">) => {
+    const startDateTime = `${meetDetails.date}T${meetDetails.startTime}:00`;
+    const endDateTime = `${meetDetails.date}T${meetDetails.endTime}:00`;
+
+    const res = await fetch("/api/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: meetDetails.title,
+        description: meetDetails.description,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        attendees: [],
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const newMeet: CalendarMeeting = {
+        id: data.event.id,
+        ...meetDetails,
+      };
+      dispatch(addMeeting(newMeet));
+    }
+  };
+
+  const handleAddTask = async (taskDetails: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
+    const firstTeam = teams[0];
+    if (!firstTeam) return;
+
+    const dueDateTime = taskDetails.dueTime
+      ? `${taskDetails.dueDate}T${taskDetails.dueTime}:00`
+      : `${taskDetails.dueDate}T12:00:00`;
+
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: taskDetails.title,
+        description: taskDetails.description,
+        priority: taskDetails.priority,
+        dueDate: dueDateTime,
+        teamId: firstTeam.id,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const newTask: CalendarTask = {
+        id: data.task.id,
+        title: data.task.title,
+        date: taskDetails.dueDate,
+        time: taskDetails.dueTime,
+        status: data.task.status,
+        priority: data.task.priority,
+        assigneeName: null,
+      };
+      dispatch(addTask(newTask));
+    }
   };
 
   const handleUploadFile = (name: string, type: FileItem["type"], size: string) => {
@@ -429,7 +484,9 @@ export function Dashboard() {
             {activeView === "calendar" && (
               <CalendarView
                 meetings={meetings}
+                tasks={tasks}
                 onAddMeeting={handleAddMeeting}
+                onAddTask={handleAddTask}
                 onJoinMeeting={handleJoinMeeting}
                 selectedMeetingId={selectedMeetingId}
               />

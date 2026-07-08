@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheDel } from "@/lib/redis";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { user: { select: { id: true, name: true, username: true, email: true } } },
   });
 
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({ member }, { status: 201 });
 }
 
@@ -75,5 +77,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     where: { userId_teamId: { userId, teamId } },
   });
 
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({ success: true });
 }

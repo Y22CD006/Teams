@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 function formatTeam(team: any) {
   return {
@@ -34,6 +35,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const cacheKey = `user:${session.userId}:teams`;
+  const cached = await cacheGet<any>(cacheKey);
+  if (cached) return NextResponse.json(cached);
+
   const memberships = await prisma.teamMember.findMany({
     where: { userId: session.userId },
     include: {
@@ -56,7 +61,9 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ teams: memberships.map((m) => formatTeam(m.team)) });
+  const result = { teams: memberships.map((m) => formatTeam(m.team)) };
+  await cacheSet(cacheKey, result, 30);
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
@@ -111,5 +118,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({ team: formatTeam(team) }, { status: 201 });
 }

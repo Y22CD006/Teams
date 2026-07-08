@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
   const session = await getSession();
@@ -9,6 +10,8 @@ export async function GET() {
   }
 
   const userId = session.userId;
+
+  const cacheKey = `user:${userId}:activity`; const cached = await cacheGet<any>(cacheKey); if (cached) return NextResponse.json(cached);
 
   const [events, meetingsCount, filesCount, unreadChats, unreadChannelMessages] = await Promise.all([
     prisma.activityEvent.findMany({
@@ -64,6 +67,7 @@ export async function GET() {
     createdAt: e.createdAt.toISOString(),
   }));
 
+  await cacheSet(cacheKey, { events: mappedEvents, summary: { meetingsCount, filesCount, unreadCount: unreadChats + unreadChannelMessages } }, 30);
   return NextResponse.json({
     events: mappedEvents,
     summary: {
@@ -90,5 +94,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await cacheDel(`user:${session.userId}:activity`);
   return NextResponse.json({ event }, { status: 201 });
 }

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const cacheKey = `user:${session.userId}:chats`; const cached = await cacheGet<any>(cacheKey); if (cached) return NextResponse.json(cached);
 
   const memberships = await prisma.dMMember.findMany({
     where: { userId: session.userId },
@@ -63,6 +66,7 @@ export async function GET() {
     };
   });
 
+  await cacheSet(cacheKey, { chats }, 30);
   return NextResponse.json({ chats });
 }
 
@@ -128,6 +132,7 @@ export async function POST(req: NextRequest) {
   }
 
   const chat = formatChat(created, session.userId);
+  await cacheDel(`user:${session.userId}:chats`);
   return NextResponse.json({ chat, existing: false }, { status: 201 });
 }
 

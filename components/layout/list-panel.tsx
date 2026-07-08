@@ -138,6 +138,7 @@ export const ListPanel = ({
   }, [peopleSearch]);
 
   const [sendingRequests, setSendingRequests] = useState<Set<string>>(new Set());
+  const [respondingRequests, setRespondingRequests] = useState<Set<string>>(new Set());
 
   const handleSendRequest = async (recipientId: string) => {
     if (sendingRequests.has(recipientId)) return;
@@ -158,6 +159,8 @@ export const ListPanel = ({
   };
 
   const handleRespondRequest = async (id: string, status: string) => {
+    if (respondingRequests.has(id)) return;
+    setRespondingRequests((prev) => new Set(prev).add(id));
     const res = await fetch(`/api/friend-requests/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -166,6 +169,11 @@ export const ListPanel = ({
     if (res.ok) {
       fetchRequests();
     }
+    setRespondingRequests((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   const toggleTeam = (teamId: string) => {
@@ -677,9 +685,13 @@ export const ListPanel = ({
                               receivedRequests.find((r: any) => r.senderId === user.id)?.id,
                               'ACCEPTED'
                             )}
-                            className="text-[10px] bg-[#6366F1] text-white px-2 py-1 rounded-lg font-semibold hover:bg-[#5053e1] transition-all"
+                            disabled={respondingRequests.has(receivedRequests.find((r: any) => r.senderId === user.id)?.id || '')}
+                            className="text-[10px] bg-[#6366F1] text-white px-2 py-1 rounded-lg font-semibold hover:bg-[#5053e1] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
                           >
-                            Accept
+                            {respondingRequests.has(receivedRequests.find((r: any) => r.senderId === user.id)?.id || '') ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : null}
+                            {respondingRequests.has(receivedRequests.find((r: any) => r.senderId === user.id)?.id || '') ? 'Accepting...' : 'Accept'}
                           </button>
                         ) : (
                           <button
@@ -730,17 +742,19 @@ export const ListPanel = ({
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleRespondRequest(req.id, 'ACCEPTED')}
-                        className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-all"
+                        disabled={respondingRequests.has(req.id)}
+                        className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         title="Accept"
                       >
-                        <Check className="w-3.5 h-3.5" />
+                        {respondingRequests.has(req.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={() => handleRespondRequest(req.id, 'REJECTED')}
-                        className="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg hover:bg-rose-500/20 transition-all"
+                        disabled={respondingRequests.has(req.id)}
+                        className="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg hover:bg-rose-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         title="Reject"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        {respondingRequests.has(req.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
   const session = await getSession();
@@ -62,5 +63,6 @@ export async function PATCH(req: Request) {
     });
   }
 
+  await cacheDel(`user:${session.userId}:authme`);
   return NextResponse.json({ user });
 }

@@ -11,6 +11,7 @@ export function PeopleView({ currentUserId }: { currentUserId: string }) {
   const [sentRequests, setSentRequests] = useState<any[]>([]);
   const [receivedRequests, setReceivedRequests] = useState<any[]>([]);
   const [sending, setSending] = useState<Set<string>>(new Set());
+  const [responding, setResponding] = useState<Set<string>>(new Set());
   const [removing, setRemoving] = useState<Set<string>>(new Set());
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
@@ -64,12 +65,19 @@ export function PeopleView({ currentUserId }: { currentUserId: string }) {
   };
 
   const handleRespond = async (id: string, status: string) => {
+    if (responding.has(id)) return;
+    setResponding((prev) => new Set(prev).add(id));
     await fetch(`/api/friend-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     fetchRequests();
+    setResponding((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   const getConnectionId = (userId: string) => {
@@ -149,9 +157,11 @@ export function PeopleView({ currentUserId }: { currentUserId: string }) {
                 ) : receivedRequests.some((r) => r.senderId === user.id) ? (
                   <button
                     onClick={() => handleRespond(receivedRequests.find((r) => r.senderId === user.id)?.id, "ACCEPTED")}
-                    className="text-xs bg-[#6366F1] text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-[#5053e1] transition-all flex items-center gap-1"
+                    disabled={responding.has(receivedRequests.find((r) => r.senderId === user.id)?.id || '')}
+                    className="text-xs bg-[#6366F1] text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-[#5053e1] transition-all flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <Check className="w-3 h-3" /> Accept
+                    {responding.has(receivedRequests.find((r) => r.senderId === user.id)?.id || '') ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    {responding.has(receivedRequests.find((r) => r.senderId === user.id)?.id || '') ? "Accepting..." : "Accept"}
                   </button>
                 ) : (
                   <button
@@ -184,15 +194,19 @@ export function PeopleView({ currentUserId }: { currentUserId: string }) {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleRespond(req.id, "ACCEPTED")}
-                    className="text-xs bg-[#6366F1] text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-[#5053e1] transition-all flex items-center gap-1"
+                    disabled={responding.has(req.id)}
+                    className="text-xs bg-[#6366F1] text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-[#5053e1] transition-all flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <Check className="w-3 h-3" /> Accept
+                    {responding.has(req.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    {responding.has(req.id) ? "Accepting..." : "Accept"}
                   </button>
                   <button
                     onClick={() => handleRespond(req.id, "REJECTED")}
-                    className="text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[#2e3748] transition-all flex items-center gap-1"
+                    disabled={responding.has(req.id)}
+                    className="text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[#2e3748] transition-all flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <X className="w-3 h-3" /> Decline
+                    {responding.has(req.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                    {responding.has(req.id) ? "Declining..." : "Decline"}
                   </button>
                 </div>
               </div>

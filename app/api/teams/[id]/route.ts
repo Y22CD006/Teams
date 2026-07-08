@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheDel } from "@/lib/redis";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -24,6 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (description !== undefined) data.description = description;
 
   const team = await prisma.team.update({ where: { id }, data });
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({ team });
 }
 
@@ -41,5 +43,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   await prisma.team.delete({ where: { id } });
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({ success: true });
 }

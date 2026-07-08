@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheDel } from "@/lib/redis";
 
 export async function PATCH() {
   const session = await getSession();
@@ -13,5 +14,6 @@ export async function PATCH() {
     data: { read: true },
   });
 
+  await cacheDel(`user:${session.userId}:notifications`);
   return NextResponse.json({ success: true });
 }

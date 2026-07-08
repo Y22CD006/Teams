@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheDel } from "@/lib/redis";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
+  await cacheDel(`user:${session.userId}:teams`);
   return NextResponse.json({
     channel: {
       id: channel.id,

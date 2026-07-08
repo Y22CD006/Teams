@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheDel } from "@/lib/redis";
 
 export async function GET() {
   const session = await getSession();
@@ -69,5 +70,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await cacheDel(`user:${session.userId}:activity`);
   return NextResponse.json({ request }, { status: 201 });
 }

@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import type { Chat, Team, CalendarMeeting, FileItem, ThreadReply, User, Message } from "@/lib/types";
+import type { Chat, Team, CalendarMeeting, CalendarTask, FileItem, ThreadReply, User, Message } from "@/lib/types";
 
 interface DataState {
   chats: Chat[];
   teams: Team[];
   meetings: CalendarMeeting[];
+  tasks: CalendarTask[];
   files: FileItem[];
   threadReplies: ThreadReply[];
   allUsers: User[];
@@ -15,6 +16,7 @@ const initialState: DataState = {
   chats: [],
   teams: [],
   meetings: [],
+  tasks: [],
   files: [],
   threadReplies: [],
   allUsers: [],
@@ -22,18 +24,20 @@ const initialState: DataState = {
 };
 
 export const fetchAllData = createAsyncThunk("data/fetchAll", async () => {
-  const [teamsRes, chatsRes, meetingsRes, filesRes, usersRes] = await Promise.all([
+  const [teamsRes, chatsRes, meetingsRes, tasksRes, filesRes, usersRes] = await Promise.all([
     fetch("/api/teams"),
     fetch("/api/chats"),
     fetch("/api/meetings"),
+    fetch("/api/tasks"),
     fetch("/api/files"),
     fetch("/api/users"),
   ]);
 
-  const [teams, chats, meetings, files, users] = await Promise.all([
+  const [teams, chats, meetings, tasks, files, users] = await Promise.all([
     teamsRes.ok ? teamsRes.json() : { teams: [] },
     chatsRes.ok ? chatsRes.json() : { chats: [] },
     meetingsRes.ok ? meetingsRes.json() : { meetings: [] },
+    tasksRes.ok ? tasksRes.json() : { tasks: [] },
     filesRes.ok ? filesRes.json() : { files: [] },
     usersRes.ok ? usersRes.json() : { users: [] },
   ]);
@@ -42,6 +46,7 @@ export const fetchAllData = createAsyncThunk("data/fetchAll", async () => {
     teams: teams.teams,
     chats: chats.chats,
     meetings: meetings.meetings,
+    tasks: tasks.tasks,
     files: files.files,
     users: users.users,
   };
@@ -163,6 +168,19 @@ const dataSlice = createSlice({
       const team = state.teams.find((t) => t.id === action.payload.teamId);
       if (team) team.channels = team.channels.filter((ch) => ch.id !== action.payload.channelId);
     },
+    addMeeting(state, action: PayloadAction<CalendarMeeting>) {
+      state.meetings.push(action.payload);
+    },
+    addTask(state, action: PayloadAction<CalendarTask>) {
+      state.tasks.push(action.payload);
+    },
+    updateTaskStatus(state, action: PayloadAction<{ taskId: string; status: string }>) {
+      const task = state.tasks.find((t) => t.id === action.payload.taskId);
+      if (task) task.status = action.payload.status;
+    },
+    deleteTask(state, action: PayloadAction<string>) {
+      state.tasks = state.tasks.filter((t) => t.id !== action.payload);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -171,6 +189,7 @@ const dataSlice = createSlice({
         state.teams = action.payload.teams;
         state.chats = action.payload.chats;
         state.meetings = action.payload.meetings;
+        state.tasks = action.payload.tasks;
         state.files = action.payload.files;
         state.allUsers = action.payload.users;
         state.loading = false;
@@ -183,5 +202,6 @@ export const {
   setChats, setTeams, addChat, addTeam, addChannel,
   addMessage, addReaction, deleteMessage, addReply,
   removeTeam, removeChannel,
+  addMeeting, addTask, updateTaskStatus, deleteTask,
 } = dataSlice.actions;
 export default dataSlice.reducer;

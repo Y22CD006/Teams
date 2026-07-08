@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { pusherServer } from "@/lib/pusher";
+import { cacheDel } from "@/lib/redis";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -68,5 +69,6 @@ export async function POST(req: NextRequest) {
     await pusherServer.trigger(pusherChannel, "new-message", msg);
   }
 
+  await cacheDel(`user:${session.userId}:activity`);
   return NextResponse.json({ message: formatted }, { status: 201 });
 }

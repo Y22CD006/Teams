@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const cacheKey = `user:${session.userId}:meetings`; const cached = await cacheGet<any>(cacheKey); if (cached) return NextResponse.json(cached);
 
   const events = await prisma.event.findMany({
     where: {
@@ -38,6 +41,7 @@ export async function GET() {
     isLive: false,
   }));
 
+  await cacheSet(cacheKey, { meetings }, 30);
   return NextResponse.json({ meetings });
 }
 
@@ -76,5 +80,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await cacheDel(`user:${session.userId}:meetings`);
   return NextResponse.json({ event }, { status: 201 });
 }
