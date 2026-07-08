@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0B0F19]">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 p-6">
         <h1 className="text-2xl font-bold text-white text-center">Sign in to Teams</h1>
 
@@ -42,23 +42,23 @@ export default function LoginPage() {
         )}
 
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Email</label>
+          <label className="text-xs text-[var(--text-secondary)] font-mono uppercase tracking-wider">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+            className="w-full bg-[var(--bg-tertiary)] text-white text-sm rounded-xl px-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
             required
           />
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-gray-400 font-mono uppercase tracking-wider">Password</label>
+          <label className="text-xs text-[var(--text-secondary)] font-mono uppercase tracking-wider">Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-[#1F2937] text-white text-sm rounded-xl px-3 py-2 border border-[#374151] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
+            className="w-full bg-[var(--bg-tertiary)] text-white text-sm rounded-xl px-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1]"
             required
           />
         </div>

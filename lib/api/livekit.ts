@@ -1,6 +1,6 @@
 import { AccessToken } from "livekit-server-sdk";
 
-export function generateLiveKitToken(identity: string, room: string): string {
+export async function generateLiveKitToken(identity: string, room: string): Promise<string> {
   const at = new AccessToken(
     process.env.LIVEKIT_API_KEY!,
     process.env.LIVEKIT_API_SECRET!,

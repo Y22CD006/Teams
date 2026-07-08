@@ -54,7 +54,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
   return (
     <div id="immersive-meeting-canvas" className="flex-1 bg-[#090D16] flex flex-col h-full overflow-hidden select-none relative">
       
-      <div className="h-14 border-b border-[#374151]/40 px-5 flex items-center justify-between bg-[#111827]/90 backdrop-blur z-10 flex-shrink-0">
+      <div className="h-14 border-b border-[var(--border-color)] px-5 flex items-center justify-between bg-[var(--bg-secondary)]/90 backdrop-blur z-10 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
@@ -62,10 +62,10 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
           </div>
           <div className="h-4 w-[1px] bg-[#374151]" />
           <div>
-            <h3 className="text-xs font-semibold text-white leading-tight truncate max-w-[200px]">
+            <h3 className="text-xs font-semibold text-[var(--text-primary)] leading-tight truncate max-w-[200px]">
               {meetingTitle}
             </h3>
-            <p className="text-[10px] text-gray-400 font-mono mt-0.5">Secure Multi-Region Bridge</p>
+            <p className="text-[10px] text-[var(--text-secondary)] font-mono mt-0.5">Secure Multi-Region Bridge</p>
           </div>
         </div>
 
@@ -79,8 +79,8 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             onClick={() => setViewLayout('grid')}
             className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
               viewLayout === 'grid' 
-                ? 'bg-[#1F2937] border-[#6366F1] text-[#6366F1]' 
-                : 'bg-[#111827] border-[#374151] text-gray-400 hover:text-white'
+                ? 'bg-[var(--bg-tertiary)] border-[#6366F1] text-[#6366F1]' 
+                : 'bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
             title="Grid View"
           >
@@ -90,8 +90,8 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             onClick={() => setViewLayout('focus')}
             className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
               viewLayout === 'focus' 
-                ? 'bg-[#1F2937] border-[#6366F1] text-[#6366F1]' 
-                : 'bg-[#111827] border-[#374151] text-gray-400 hover:text-white'
+                ? 'bg-[var(--bg-tertiary)] border-[#6366F1] text-[#6366F1]' 
+                : 'bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
             title="Presenter Focus View"
           >
@@ -104,18 +104,18 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
         
         {screenShareActive ? (
           <div className="w-full h-full flex flex-col md:flex-row gap-4">
-            <div className="flex-1 bg-[#111827] border border-indigo-500 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative">
-              <div className="h-8 bg-[#1F2937] border-b border-[#374151] px-4 flex items-center justify-between text-[11px] font-mono text-indigo-400">
+            <div className="flex-1 bg-[var(--bg-secondary)] border border-indigo-500 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative">
+              <div className="h-8 bg-[var(--bg-tertiary)] border-b border-[var(--border-color)] px-4 flex items-center justify-between text-[11px] font-mono text-indigo-400">
                 <span className="flex items-center gap-1.5">
                   <Monitor className="w-3.5 h-3.5" /> {currentUser.name} is sharing their screen
                 </span>
                 <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-1.5 rounded">LIVE PREVIEW</span>
               </div>
               
-              <div className="flex-1 bg-[#0B0F19] p-6 flex flex-col justify-between font-sans text-white">
+              <div className="flex-1 bg-[var(--bg-primary)] p-6 flex flex-col justify-between font-sans text-[var(--text-primary)]">
                 <div className="space-y-4 max-w-lg">
                   <div className="text-sm font-bold text-indigo-300">Apollo Component Library Refactor Branch</div>
-                  <div className="bg-[#111827] p-4 rounded-xl border border-[#374151] font-mono text-[10px] text-gray-300 space-y-1 overflow-x-auto shadow-inner">
+                  <div className="bg-[var(--bg-secondary)] p-4 rounded-xl border border-[var(--border-color)] font-mono text-[10px] text-[var(--text-primary)] space-y-1 overflow-x-auto shadow-inner">
                     <p className="text-gray-500">// Debounce ResizeObserver calculation to prevent frame pacing bottle-necks</p>
                     <p><span className="text-pink-400">const</span> useDebouncedResize = (callback, delay) =&gt; {'{'}</p>
                     <p>&nbsp;&nbsp;<span className="text-blue-400">const</span> timeoutRef = useRef();</p>
@@ -126,12 +126,12 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
                     <p>&nbsp;&nbsp;{'}'}, [callback, delay]);</p>
                     <p>{'}'};</p>
                   </div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
                     This custom react hook decouples expensive canvas recalculations from browser layout passes. Testing showed Firefox repaints dropped from 14ms down to under 2ms!
                   </p>
                 </div>
                 
-                <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pt-4 border-t border-[#374151]/40">
+                <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pt-4 border-t border-[var(--border-color)]">
                   <span>vscode-workspace // apollo-design-system</span>
                   <span>96% efficiency gain verified</span>
                 </div>
@@ -142,22 +142,22 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
               {participants.map((user, idx) => (
                 <div 
                   key={idx}
-                  className={`w-40 md:w-full h-24 rounded-xl bg-[#111827] border flex flex-col items-center justify-center relative flex-shrink-0 transition-all ${
+                  className={`w-40 md:w-full h-24 rounded-xl bg-[var(--bg-secondary)] border flex flex-col items-center justify-center relative flex-shrink-0 transition-all ${
                     user.isSpeaking 
                       ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md shadow-emerald-900/10' 
-                      : 'border-[#374151]'
+                      : 'border-[var(--border-color)]'
                   }`}
                 >
                   {user.cameraOn ? (
-                    <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${user.color} flex items-center justify-center text-white text-xs font-bold border border-[#374151] mb-1.5 shadow`}>
+                    <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${user.color} flex items-center justify-center text-white text-xs font-bold border border-[var(--border-color)] mb-1.5 shadow`}>
                       {user.initials}
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 text-xs font-bold mb-1.5">
+                    <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-[var(--text-secondary)] text-xs font-bold mb-1.5">
                       {user.initials}
                     </div>
                   )}
-                  <span className="text-[10px] text-white font-medium truncate max-w-[85%]">{user.name}</span>
+                  <span className="text-[10px] text-[var(--text-primary)] font-medium truncate max-w-[85%]">{user.name}</span>
                   {user.isSpeaking && (
                     <div className="absolute top-2 right-2 flex gap-0.5 items-end h-2">
                       <span className="w-0.5 bg-emerald-500 h-1.5 animate-pulse" />
@@ -182,10 +182,10 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
                 return (
                   <div
                     key={idx}
-                    className={`rounded-2xl border bg-[#111827] relative overflow-hidden flex flex-col items-center justify-center shadow-2xl transition-all duration-300 ${
+                    className={`rounded-2xl border bg-[var(--bg-secondary)] relative overflow-hidden flex flex-col items-center justify-center shadow-2xl transition-all duration-300 ${
                       isSpeakingActive 
                         ? 'border-emerald-500 ring-4 ring-emerald-500/10 scale-[1.01] shadow-emerald-950/20' 
-                        : 'border-[#374151] hover:border-gray-500'
+                        : 'border-[var(--border-color)] hover:border-gray-500'
                     }`}
                   >
                     {user.cameraOn ? (
@@ -199,7 +199,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
                         </div>
                       </div>
                     ) : (
-                      <div className="absolute inset-0 bg-[#0B0F19] flex flex-col items-center justify-center">
+                      <div className="absolute inset-0 bg-[var(--bg-primary)] flex flex-col items-center justify-center">
                         <div className="w-16 h-16 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-500 text-lg font-bold">
                           {user.initials}
                         </div>
@@ -239,13 +239,13 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
         )}
       </div>
 
-      <div className="h-20 border-t border-[#374151]/40 px-6 bg-[#111827] flex items-center justify-between flex-shrink-0 z-10">
+      <div className="h-20 border-t border-[var(--border-color)] px-6 bg-[var(--bg-secondary)] flex items-center justify-between flex-shrink-0 z-10">
         
         <div className="hidden sm:flex items-center gap-2.5">
-          <button className="bg-[#1F2937] text-gray-400 hover:text-white p-2 rounded-xl border border-[#374151] hover:bg-[#2e3748] transition-all">
+          <button className="bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-2 rounded-xl border border-[var(--border-color)] hover:bg-[#2e3748] transition-all">
             <Users className="w-4.5 h-4.5" />
           </button>
-          <button className="bg-[#1F2937] text-gray-400 hover:text-white p-2 rounded-xl border border-[#374151] hover:bg-[#2e3748] transition-all">
+          <button className="bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-2 rounded-xl border border-[var(--border-color)] hover:bg-[#2e3748] transition-all">
             <MessageSquare className="w-4.5 h-4.5" />
           </button>
         </div>
@@ -256,7 +256,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             onClick={() => setMicActive(!micActive)}
             className={`p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer ${
               micActive
-                ? 'bg-[#1F2937] border-[#374151] text-white hover:bg-[#2e3748]'
+                ? 'bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[#2e3748]'
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
             }`}
             title={micActive ? 'Mute Mic' : 'Unmute Mic'}
@@ -269,7 +269,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             onClick={() => setCameraActive(!cameraActive)}
             className={`p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer ${
               cameraActive
-                ? 'bg-[#1F2937] border-[#374151] text-white hover:bg-[#2e3748]'
+                ? 'bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[#2e3748]'
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
             }`}
             title={cameraActive ? 'Stop Camera' : 'Start Camera'}
@@ -283,7 +283,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             className={`p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer ${
               screenShareActive
                 ? 'bg-indigo-500 text-white border-indigo-400 hover:bg-[#5053e1]'
-                : 'bg-[#1F2937] border-[#374151] text-indigo-400 hover:text-indigo-300 hover:bg-[#2e3748]'
+                : 'bg-[var(--bg-tertiary)] border-[var(--border-color)] text-indigo-400 hover:text-indigo-300 hover:bg-[#2e3748]'
             }`}
             title={screenShareActive ? 'Stop Sharing' : 'Share Screen'}
           >
@@ -295,7 +295,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
             className={`p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer ${
               raisedHand
                 ? 'bg-yellow-500 text-black border-yellow-400 hover:bg-yellow-600'
-                : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:bg-[#2e3748]'
+                : 'bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#2e3748]'
             }`}
             title="Raise Hand"
           >
@@ -315,7 +315,7 @@ export const MeetingView = ({ currentUser, meetingTitle, onLeave }: MeetingViewP
         </div>
 
         <div className="hidden md:flex items-center gap-2">
-          <Volume2 className="w-4.5 h-4.5 text-gray-400" />
+          <Volume2 className="w-4.5 h-4.5 text-[var(--text-secondary)]" />
           <div className="w-16 h-1 bg-gray-700 rounded-full overflow-hidden">
             <div className="w-4/5 h-full bg-[#6366F1]" />
           </div>

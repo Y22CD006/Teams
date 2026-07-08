@@ -91,37 +91,37 @@ export const ChatView = ({
   const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
 
   return (
-    <div id="chat-messages-canvas" className="flex-1 bg-[#0B0F19] flex flex-col h-full overflow-hidden min-w-0">
+    <div id="chat-messages-canvas" className="flex-1 bg-[var(--bg-primary)] flex flex-col h-full overflow-hidden min-w-0">
       
       {/* Chat Header */}
-      <div id="chat-thread-header" className="h-14 border-b border-[#374151] px-5 flex items-center justify-between bg-[#111827] flex-shrink-0">
+      <div id="chat-thread-header" className="h-14 border-b border-[var(--border-color)] px-5 flex items-center justify-between bg-[var(--bg-secondary)] flex-shrink-0">
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-white flex items-center gap-1.5 truncate leading-tight">
+          <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5 truncate leading-tight">
             {isChannel && <span className="text-gray-500 font-mono">#</span>}
             {title}
           </h2>
           {subtitle && (
-            <p className="text-[10px] text-gray-400 font-mono truncate">{subtitle}</p>
+            <p className="text-[10px] text-[var(--text-secondary)] font-mono truncate">{subtitle}</p>
           )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             onClick={() => onStartCall(false)}
-            className="p-2 rounded-xl hover:bg-[#1F2937] text-gray-400 hover:text-[#6366F1] transition-all"
+            className="p-2 rounded-xl hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[#6366F1] transition-all"
             title="Start Audio Call"
           >
             <Phone className="w-4 h-4" />
           </button>
           <button
             onClick={() => onStartCall(true)}
-            className="p-2 rounded-xl hover:bg-[#1F2937] text-gray-400 hover:text-[#6366F1] transition-all"
+            className="p-2 rounded-xl hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[#6366F1] transition-all"
             title="Start Video Call"
           >
             <Video className="w-4 h-4" />
           </button>
           <div className="w-[1px] h-5 bg-[#374151] mx-1" />
-          <button className="p-2 rounded-xl hover:bg-[#1F2937] text-gray-400 hover:text-white transition-all">
+          <button className="p-2 rounded-xl hover:bg-[#1F2937] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all">
             <Info className="w-4 h-4" />
           </button>
         </div>
@@ -141,7 +141,7 @@ export const ChatView = ({
               {/* Sender Avatar */}
               {!isMe && (
                 <div className="flex-shrink-0 mt-0.5">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 text-white text-xs font-bold flex items-center justify-center border border-[#374151]">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 text-white text-xs font-bold flex items-center justify-center border border-[var(--border-color)]">
                     {msg.senderAvatar}
                   </div>
                 </div>
@@ -150,7 +150,7 @@ export const ChatView = ({
               <div className="flex-1 min-w-0">
                 {/* Sender Name + Timestamp Line */}
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold text-white leading-tight">
+                  <span className="text-xs font-bold text-[var(--text-primary)] leading-tight">
                     {msg.senderName}
                   </span>
                   <span className="text-[9px] text-gray-500 font-mono">
@@ -159,7 +159,7 @@ export const ChatView = ({
                 </div>
 
                 {/* Message Content */}
-                <p className="text-xs text-gray-300 mt-0.5 leading-relaxed whitespace-pre-wrap break-words select-text">
+                <p className="text-xs text-[var(--text-primary)] mt-0.5 leading-relaxed whitespace-pre-wrap break-words select-text">
                   {msg.content}
                 </p>
 
@@ -167,11 +167,11 @@ export const ChatView = ({
                 {msg.attachments && msg.attachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {msg.attachments.map((att) => (
-                      <div key={att.id} className="flex items-center gap-1.5 bg-[#1F2937] border border-[#374151] px-2.5 py-1.5 rounded-lg">
+                      <div key={att.id} className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-2.5 py-1.5 rounded-lg">
                         <div className="p-1 rounded bg-indigo-950/40">
                           <Code className="w-3 h-3 text-indigo-400" />
                         </div>
-                        <span className="text-[10px] font-mono text-gray-300 truncate max-w-[120px]">{att.name}</span>
+                        <span className="text-[10px] font-mono text-[var(--text-primary)] truncate max-w-[120px]">{att.name}</span>
                         <span className="text-[9px] text-gray-500">{att.size}</span>
                       </div>
                     ))}
@@ -188,7 +188,7 @@ export const ChatView = ({
                         className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-medium transition-all ${
                           react.users.includes(currentUser.id)
                             ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300 font-semibold'
-                            : 'bg-[#1F2937]/40 border-[#374151] text-gray-400 hover:border-gray-500'
+                            : 'bg-[var(--bg-tertiary)]/40 border-[var(--border-color)] text-[var(--text-secondary)] hover:border-gray-500'
                         }`}
                       >
                         <span>{react.emoji}</span>
@@ -211,7 +211,7 @@ export const ChatView = ({
               </div>
 
               {/* Message Hover Actions Toolbar */}
-              <div className="absolute -top-3 right-2 bg-[#1F2937] border border-[#374151] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-0.5 z-20">
+              <div className="absolute -top-3 right-2 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-0.5 z-20">
                 {/* Quick Emoji Actions */}
                 {quickReactions.slice(0, 3).map((emoji) => (
                   <button
@@ -227,7 +227,7 @@ export const ChatView = ({
 
                 <button
                   onClick={() => onOpenThread(msg)}
-                  className="p-1 hover:bg-[#111827] rounded text-gray-400 hover:text-white transition-all"
+                  className="p-1 hover:bg-[#111827] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                   title="Reply in thread"
                 >
                   <CornerUpRight className="w-3 h-3" />
@@ -250,14 +250,14 @@ export const ChatView = ({
       </div>
 
       {/* Chat Input */}
-      <div className="p-3 bg-[#111827] border-t border-[#374151] flex-shrink-0">
+      <div className="p-3 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex-shrink-0">
         {/* Attachment preview chips */}
         {selectedAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2 px-2">
             {selectedAttachments.map((att) => (
-              <div key={att.id} className="flex items-center gap-1.5 bg-[#1F2937] border border-[#374151] px-2 py-1 rounded-lg">
+              <div key={att.id} className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-2 py-1 rounded-lg">
                 <Code className="w-3 h-3 text-indigo-400" />
-                <span className="text-[10px] text-gray-300">{att.name}</span>
+                <span className="text-[10px] text-[var(--text-primary)]">{att.name}</span>
                 <button
                   onClick={() => removeAttachment(att.id)}
                   className="text-gray-500 hover:text-rose-400 ml-0.5"
@@ -270,28 +270,28 @@ export const ChatView = ({
         )}
 
         <div className="flex items-end gap-2">
-          <div className="flex-1 bg-[#1F2937] border border-[#374151] rounded-xl px-3 py-2 focus-within:ring-1 focus-within:ring-[#6366F1] focus-within:border-[#6366F1] transition-all">
+          <div className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-xl px-3 py-2 focus-within:ring-1 focus-within:ring-[#6366F1] focus-within:border-[#6366F1] transition-all">
             {/* Inline Formatting Bar */}
             <div className="flex items-center gap-0.5 mb-1.5">
               <div className="relative">
                 <button
                   onClick={() => setFormatMenuOpen(!formatMenuOpen)}
-                  className="p-1 rounded hover:bg-[#111827] text-gray-400 hover:text-white transition-all"
+                  className="p-1 rounded hover:bg-[#111827] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                 >
                   <Bold className="w-3 h-3" />
                 </button>
                 {formatMenuOpen && (
-                  <div className="absolute bottom-8 left-0 bg-[#1F2937] border border-[#374151] rounded-lg shadow-xl flex items-center gap-0.5 p-1 z-30">
-                    <button onClick={() => addFormatting('bold')} className="p-1.5 rounded hover:bg-[#111827] text-gray-300 hover:text-white text-xs font-bold">B</button>
-                    <button onClick={() => addFormatting('italic')} className="p-1.5 rounded hover:bg-[#111827] text-gray-300 hover:text-white text-xs italic">I</button>
-                    <button onClick={() => addFormatting('code')} className="p-1.5 rounded hover:bg-[#111827] text-gray-300 hover:text-white text-xs font-mono">&lt;/&gt;</button>
+                  <div className="absolute bottom-8 left-0 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-lg shadow-xl flex items-center gap-0.5 p-1 z-30">
+                    <button onClick={() => addFormatting('bold')} className="p-1.5 rounded hover:bg-[#111827] text-[var(--text-primary)] hover:text-[var(--text-primary)] text-xs font-bold">B</button>
+                    <button onClick={() => addFormatting('italic')} className="p-1.5 rounded hover:bg-[#111827] text-[var(--text-primary)] hover:text-[var(--text-primary)] text-xs italic">I</button>
+                    <button onClick={() => addFormatting('code')} className="p-1.5 rounded hover:bg-[#111827] text-[var(--text-primary)] hover:text-[var(--text-primary)] text-xs font-mono">&lt;/&gt;</button>
                   </div>
                 )}
               </div>
               <div className="w-[1px] h-3 bg-[#374151]" />
               <button
                 onClick={simulateAttachment}
-                className="p-1 rounded hover:bg-[#111827] text-gray-400 hover:text-white transition-all"
+                className="p-1 rounded hover:bg-[#111827] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                 title="Attach file"
               >
                 <Paperclip className="w-3 h-3" />
@@ -306,7 +306,7 @@ export const ChatView = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyPress}
-              className="w-full bg-transparent text-white placeholder-gray-400 text-sm focus:outline-none py-0.5"
+              className="w-full bg-transparent text-[var(--text-primary)] placeholder-gray-400 text-sm focus:outline-none py-0.5"
             />
           </div>
 
