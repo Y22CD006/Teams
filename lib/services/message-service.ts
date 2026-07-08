@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { publishToChannel, CHANNELS, EVENTS } from "@/lib/api/pusher";
 
 export async function getMessagesForChannel(channelId: string, limit = 50) {
   return prisma.message.findMany({
@@ -42,22 +41,6 @@ export async function sendMessage(data: {
     include: { author: true },
   });
 
-  if (data.channelId) {
-    await publishToChannel({
-      channel: CHANNELS.CHANNEL(data.channelId),
-      event: EVENTS.MESSAGE_CREATED,
-      data: { message },
-    });
-  }
-
-  if (data.dmId) {
-    await publishToChannel({
-      channel: CHANNELS.DM(data.dmId),
-      event: EVENTS.MESSAGE_CREATED,
-      data: { message },
-    });
-  }
-
   return message;
 }
 
@@ -74,15 +57,6 @@ export async function replyToThread(data: {
     },
     include: { author: true },
   });
-
-  const parent = await prisma.message.findUnique({ where: { id: data.messageId } });
-  if (parent?.channelId) {
-    await publishToChannel({
-      channel: CHANNELS.CHANNEL(parent.channelId),
-      event: EVENTS.THREAD_REPLY,
-      data: { reply, parentMessageId: data.messageId },
-    });
-  }
 
   return reply;
 }

@@ -57,7 +57,7 @@ export const ChatView = ({
     
     onSendMessage(inputText);
     
-    // Send to actual DB and Pusher
+    // Send to actual DB and broadcast via Redis SSE
     await sendMessage(inputText);
     
     setInputText('');
