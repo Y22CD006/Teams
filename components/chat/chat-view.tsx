@@ -55,7 +55,6 @@ export const ChatView = ({
   const handleSend = async () => {
     if (!inputText.trim()) return;
     
-    onSendMessage(inputText);
     await sendMessage(inputText);
     
     setInputText('');

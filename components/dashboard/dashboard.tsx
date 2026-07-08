@@ -126,18 +126,16 @@ export function Dashboard() {
 
     eventSource.onmessage = (event) => {
       try {
-        const parsed = JSON.parse(event.data);
-        if (parsed.type === 'new-message') {
-          const msg = parsed.data;
-          
+        const msg = JSON.parse(event.data);
+        if (msg.id) {
           const isDm = msg.dmId != null;
           const id = msg.dmId || msg.channelId;
-          
+
           dispatch(addMessage({
             chatId: isDm ? id : undefined,
             channelId: !isDm ? id : undefined,
             message: msg,
-            isMine: msg.senderId === currentUser.id
+            isMine: msg.senderId === currentUser.id,
           }));
         }
       } catch (err) {
