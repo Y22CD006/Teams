@@ -23,6 +23,7 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.0",
     "@reduxjs/toolkit": "^2.12.0",
+    "@tanstack/react-query": "^5.101.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -32,15 +33,16 @@
     "livekit-server-sdk": "^2.0.0",
     "lucide-react": "^0.460.0",
     "next": "^16.2.10",
-    "pusher": "^5.2.0",
-    "pusher-js": "^8.4.0",
+    "pusher": "^5.3.4",
+    "pusher-js": "^8.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-redux": "^9.3.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "uploadthing": "^7.0.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

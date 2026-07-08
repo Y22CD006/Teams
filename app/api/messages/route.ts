@@ -1,6 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { pusherServer } from "@/lib/pusher";
+
+export async function GET(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const channelId = searchParams.get("channelId");
+  const dmId = searchParams.get("dmId");
+
+  if (!channelId && !dmId) {
+    return NextResponse.json({ error: "channelId or dmId required" }, { status: 400 });
+  }
+
+  const messages = await prisma.message.findMany({
+    where: {
+      ...(channelId ? { channelId } : { dmId }),
+      isThread: false,
+    },
+    include: {
+      author: { select: { id: true, name: true, imageUrl: true, status: true, email: true } },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+  });
+
+  return NextResponse.json({ messages });
+}
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -24,16 +52,21 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    message: {
-      id: msg.id,
-      senderId: msg.authorId,
-      senderName: msg.author.name || "Unknown",
-      senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
-      content: msg.content,
-      timestamp: msg.createdAt.toISOString(),
-      reactions: [],
-      replyCount: 0,
-    },
-  }, { status: 201 });
+  const formatted = {
+    id: msg.id,
+    senderId: msg.authorId,
+    senderName: msg.author.name || "Unknown",
+    senderAvatar: (msg.author.name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+    content: msg.content,
+    timestamp: msg.createdAt.toISOString(),
+    reactions: [],
+    replyCount: 0,
+  };
+
+  const pusherChannel = channelId ? `channel-${channelId}` : `dm-${dmId}`;
+  if (pusherServer) {
+    await pusherServer.trigger(pusherChannel, "new-message", msg);
+  }
+
+  return NextResponse.json({ message: formatted }, { status: 201 });
 }

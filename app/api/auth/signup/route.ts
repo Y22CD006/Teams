@@ -25,17 +25,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const token = await createSession(user.id);
-    const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name } });
-    response.cookies.set("session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
-      path: "/",
-    });
-
-    return response;
+    return NextResponse.json({ success: true, user: { id: user.id, email: user.email } });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

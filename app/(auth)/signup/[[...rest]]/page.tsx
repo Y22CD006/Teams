@@ -21,11 +21,12 @@ export default function SignUpPage() {
       body: JSON.stringify({ email, password, name }),
     });
 
+    const data = await res.json();
+
     if (res.ok) {
-      router.push("/");
+      router.push("/login");
       router.refresh();
     } else {
-      const data = await res.json();
       setError(data.error || "Sign up failed");
     }
   }

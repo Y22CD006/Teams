@@ -22,11 +22,12 @@ export default function LoginPage() {
       body: JSON.stringify({ email, password }),
     });
 
+    const data = await res.json();
+
     if (res.ok) {
       router.push("/");
       router.refresh();
     } else {
-      const data = await res.json();
       setError(data.error || "Login failed");
       setLoading(false);
     }
