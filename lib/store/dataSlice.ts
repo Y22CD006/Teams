@@ -75,19 +75,41 @@ const dataSlice = createSlice({
     addMessage(state, action: PayloadAction<{
       chatId?: string; channelId?: string; teamId?: string;
       message: Message;
+      isMine?: boolean;
     }>) {
-      const { chatId, channelId, message } = action.payload;
+      const { chatId, channelId, message, isMine } = action.payload;
       if (chatId) {
         const chat = state.chats.find((c) => c.id === chatId);
-        if (chat) chat.messages.push(message);
+        if (chat && !chat.messages.some(m => m.id === message.id)) {
+          chat.messages.push(message);
+          if (!isMine) {
+            chat.unreadCount = (chat.unreadCount || 0) + 1;
+          }
+        }
       }
       if (channelId) {
         for (const team of state.teams) {
           for (const ch of team.channels) {
-            if (ch.id === channelId) {
+            if (ch.id === channelId && !ch.messages.some(m => m.id === message.id)) {
               ch.messages.push(message);
+              if (!isMine) {
+                ch.unreadCount = (ch.unreadCount || 0) + 1;
+              }
             }
           }
+        }
+      }
+    },
+    markAsRead(state, action: PayloadAction<{ chatId?: string; channelId?: string }>) {
+      const { chatId, channelId } = action.payload;
+      if (chatId) {
+        const chat = state.chats.find((c) => c.id === chatId);
+        if (chat) chat.unreadCount = 0;
+      }
+      if (channelId) {
+        for (const team of state.teams) {
+          const ch = team.channels.find(c => c.id === channelId);
+          if (ch) ch.unreadCount = 0;
         }
       }
     },
@@ -200,7 +222,7 @@ const dataSlice = createSlice({
 
 export const {
   setChats, setTeams, addChat, addTeam, addChannel,
-  addMessage, addReaction, deleteMessage, addReply,
+  addMessage, markAsRead, addReaction, deleteMessage, addReply,
   removeTeam, removeChannel,
   addMeeting, addTask, updateTaskStatus, deleteTask,
 } = dataSlice.actions;

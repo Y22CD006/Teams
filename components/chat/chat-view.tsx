@@ -7,7 +7,6 @@ import {
   CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus
 } from 'lucide-react';
 import { Chat, Team, Channel, Message, User } from '@/lib/types';
-import { useChat } from '@/hooks/use-chat';
 
 interface ChatViewProps {
   currentUser: User;
@@ -47,18 +46,11 @@ export const ChatView = ({
   }, [activeChat, activeChannel, activeChat?.messages, activeChannel?.messages]);
 
   const isChannel = !!activeChannel;
-  const { messages: dbMessages, isLoading, sendMessage } = useChat(
-    isChannel ? activeChannel.id : undefined,
-    !isChannel && activeChat ? activeChat.id : undefined
-  );
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
     
     onSendMessage(inputText);
-    
-    // Send to actual DB and Pusher
-    await sendMessage(inputText);
     
     setInputText('');
   };
@@ -81,8 +73,7 @@ export const ChatView = ({
     ? activeChannel?.description 
     : activeChat?.participants.filter(p => p.id !== currentUser.id).map(p => p.role).join(', ') || '';
 
-  // Use real DB messages if available, otherwise fallback to mock so it's not totally empty
-  const messages = dbMessages.length > 0 ? dbMessages : (isChannel ? activeChannel?.messages : activeChat?.messages) || [];
+  const messages = (isChannel ? activeChannel?.messages : activeChat?.messages) || [];
 
   const quickReactions = ['👍', '❤️', '🔥', '🎉', '😄', '👀'];
 

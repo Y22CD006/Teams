@@ -66,7 +66,11 @@ export async function POST(req: NextRequest) {
 
   const pusherChannel = channelId ? `channel-${channelId}` : `dm-${dmId}`;
   if (pusherServer) {
-    await pusherServer.trigger(pusherChannel, "new-message", msg);
+    try {
+      await pusherServer.trigger(pusherChannel, "new-message", msg);
+    } catch (e) {
+      console.error("Failed to trigger pusher event:", e);
+    }
   }
 
   await cacheDel(`user:${session.userId}:activity`);

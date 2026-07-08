@@ -23,8 +23,9 @@ import {
 import {
   fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
   addTeam, addChannel, removeTeam, removeChannel,
-  addMeeting, addTask,
+  addMeeting, addTask, markAsRead
 } from "@/lib/store/dataSlice";
+import { getPusherClient } from "@/lib/pusher";
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -118,6 +119,52 @@ export function Dashboard() {
     if (activeChannelId) localStorage.setItem("activeChannelId", activeChannelId);
   }, [activeChannelId]);
 
+  // Global Pusher listener for all chats and channels
+  useEffect(() => {
+    if (!currentUser) return;
+    const pusher = getPusherClient();
+    if (!pusher) return;
+    
+    // Collect all channels to subscribe to
+    const channelsToSubscribe = [
+      ...chats.map(c => `dm-${c.id}`),
+      ...teams.flatMap(t => t.channels.map(ch => `channel-${ch.id}`))
+    ];
+
+    const subscriptions = channelsToSubscribe.map(chName => {
+      const channel = pusher.subscribe(chName);
+      channel.bind('new-message', (msg: any) => {
+        const formattedMessage: Message = {
+          id: msg.id,
+          content: msg.content,
+          timestamp: msg.createdAt,
+          senderId: msg.author.id,
+          senderName: msg.author.name,
+          senderAvatar: msg.author.imageUrl ? msg.author.imageUrl.substring(0,2).toUpperCase() : msg.author.name.substring(0,2).toUpperCase(),
+          reactions: [],
+        };
+        
+        const isDm = chName.startsWith('dm-');
+        const id = chName.split('-').slice(1).join('-');
+        
+        dispatch(addMessage({
+          chatId: isDm ? id : undefined,
+          channelId: !isDm ? id : undefined,
+          message: formattedMessage,
+          isMine: msg.author.id === currentUser.id
+        }));
+      });
+      return channel;
+    });
+
+    return () => {
+      subscriptions.forEach((ch, idx) => {
+        ch.unbind('new-message');
+        pusher.unsubscribe(channelsToSubscribe[idx]);
+      });
+    };
+  }, [chats.length, teams.length, currentUser, dispatch]);
+
   useEffect(() => {
     dispatch(fetchCurrentUser());
     dispatch(fetchAllData());
@@ -160,15 +207,29 @@ export function Dashboard() {
     }
   };
 
-  const handleSelectChat = (chatId: string) => {
-    dispatch(setActiveChatId(chatId));
+  const handleSelectChat = (id: string) => {
+    dispatch(setActiveChatId(id));
+    dispatch(setActiveChannelId(null));
     dispatch(setActiveView("chat"));
+    dispatch(markAsRead({ chatId: id }));
+    fetch("/api/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId: id }),
+    }).catch(e => console.error("Failed to mark chat as read", e));
   };
 
   const handleSelectChannel = (teamId: string, channelId: string) => {
-    dispatch(setActiveTeamId(teamId));
     dispatch(setActiveChannelId(channelId));
+    dispatch(setActiveChatId(null));
+    dispatch(setActiveTeamId(teamId));
     dispatch(setActiveView("teams"));
+    dispatch(markAsRead({ channelId }));
+    fetch("/api/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(e => console.error("Failed to mark channel as read", e));
   };
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
@@ -182,7 +243,7 @@ export function Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        dispatch(addMessage({ chatId: activeChatId, message: data.message }));
+        dispatch(addMessage({ chatId: activeChatId, message: data.message, isMine: true }));
       }
     } else if (activeView === "teams" && activeTeamId && activeChannelId) {
       const res = await fetch("/api/messages", {
@@ -192,7 +253,7 @@ export function Dashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        dispatch(addMessage({ channelId: activeChannelId, message: data.message }));
+        dispatch(addMessage({ channelId: activeChannelId, message: data.message, isMine: true }));
       }
     }
   };

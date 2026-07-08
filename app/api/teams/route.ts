@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
-function formatTeam(team: any) {
+function formatTeam(team: any, currentUserId: string) {
   return {
     id: team.id,
     name: team.name,
@@ -14,7 +14,7 @@ function formatTeam(team: any) {
       name: ch.name,
       description: ch.description || "",
       isPrivate: ch.type === "PRIVATE",
-      unreadCount: 0,
+      unreadCount: (ch.messages || []).filter((msg: any) => msg.authorId !== currentUserId && msg.readReceipts?.length === 0).length,
       messages: (ch.messages || []).map((msg: any) => ({
         id: msg.id,
         senderId: msg.authorId,
@@ -49,6 +49,7 @@ export async function GET() {
               messages: {
                 include: {
                   author: { select: { id: true, name: true } },
+                  readReceipts: { where: { userId: session.userId } },
                 },
                 orderBy: { createdAt: "asc" },
               },
@@ -61,7 +62,7 @@ export async function GET() {
     },
   });
 
-  const result = { teams: memberships.map((m) => formatTeam(m.team)) };
+  const result = { teams: memberships.map((m) => formatTeam(m.team, session.userId)) };
   await cacheSet(cacheKey, result, 30);
   return NextResponse.json(result);
 }
@@ -100,7 +101,10 @@ export async function POST(req: NextRequest) {
       channels: {
         include: {
           messages: {
-            include: { author: { select: { id: true, name: true } } },
+            include: { 
+              author: { select: { id: true, name: true } },
+              readReceipts: { where: { userId: session.userId } }
+            },
             orderBy: { createdAt: "asc" },
           },
         },
@@ -119,5 +123,5 @@ export async function POST(req: NextRequest) {
   });
 
   await cacheDel(`user:${session.userId}:teams`);
-  return NextResponse.json({ team: formatTeam(team) }, { status: 201 });
+  return NextResponse.json({ team: formatTeam(team, session.userId) }, { status: 201 });
 }
