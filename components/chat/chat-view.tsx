@@ -4,11 +4,12 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { 
   Phone, Video, Info, Smile, Send, Bold, Italic, Code, 
   MoreHorizontal, CornerUpRight, Trash2, Heart, ThumbsUp, Flame,
-  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus
+  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus, PhoneIncoming, Copy
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Chat, Team, Channel, Message, User } from '@/lib/types';
 import { useChat } from '@/hooks/use-chat';
+import { InviteChannelMemberModal } from '@/components/teams/invite-channel-member-modal';
 
 interface ChatViewProps {
   currentUser: User;
@@ -19,6 +20,7 @@ interface ChatViewProps {
   onOpenThread: (message: Message) => void;
   onAddReaction: (messageId: string, emoji: string) => void;
   onStartCall: (isVideo: boolean) => void;
+  onJoinMeeting?: (meeting: { roomName: string }) => void;
   onDeleteMessage?: (messageId: string) => void;
 }
 
@@ -31,11 +33,13 @@ export const ChatView = ({
   onOpenThread,
   onAddReaction,
   onStartCall,
+  onJoinMeeting,
   onDeleteMessage,
 }: ChatViewProps) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPickerId, setShowEmojiPickerId] = useState<string | null>(null);
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -67,11 +71,15 @@ export const ChatView = ({
     }
   };
 
+  const quickEmojis = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '🙌', '😊', '😎', '🤔', '👀', '💯', '🚀', '👋', '✅', '⭐'];
+
   const addFormatting = (format: string) => {
     if (format === 'bold') setInputText(prev => `${prev}**bold text**`);
-    if (format === 'italic') setInputText(prev => `${prev}*italic text*`);
-    if (format === 'code') setInputText(prev => `${prev}\`code block\``);
-    setFormatMenuOpen(false);
+    else if (format === 'italic') setInputText(prev => `${prev}*italic text*`);
+    else if (format === 'code') setInputText(prev => `${prev}\`code block\``);
+    else if (format === 'emoji') setFormatMenuOpen(!formatMenuOpen);
+    else setInputText(prev => `${prev}${format}`);
+    if (format !== 'emoji') setFormatMenuOpen(false);
   };
 
   const title = isChannel ? `# ${activeChannel?.name}` : activeChat?.name || '';
@@ -170,7 +178,7 @@ export const ChatView = ({
               <MonitorUp className="w-5 h-5" />
             </button>
             <div className="w-[1px] h-6 bg-[var(--border-color)] mx-1" />
-            <button className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Add people">
+            <button onClick={() => setInviteModalOpen(true)} className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Add people">
               <Users className="w-5 h-5" />
             </button>
             <button className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Pop out chat">
@@ -254,6 +262,27 @@ export const ChatView = ({
                     : 'bg-white dark:bg-[#3B3A39] text-[var(--text-primary)] border border-[var(--border-color)] rounded-tl-sm'
                 }`}>
                   {msg.content}
+                  {msg.isCallNotification && msg.meetingRoom && onJoinMeeting && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => onJoinMeeting({ roomName: msg.meetingRoom! })}
+                        className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                      >
+                        <PhoneIncoming className="w-3.5 h-3.5" />
+                        Join Call
+                      </button>
+                      <button
+                        onClick={() => {
+                          const link = `${window.location.origin}/meeting/${msg.meetingRoom}`;
+                          navigator.clipboard.writeText(link);
+                        }}
+                        className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium px-3 py-1.5 rounded-lg border border-[var(--border-color)] transition-all"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy Link
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Reactions */}
@@ -335,27 +364,40 @@ export const ChatView = ({
         <div className="bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-lg flex flex-col shadow-sm focus-within:border-[#5B5FC7] dark:focus-within:border-[#7977F7] focus-within:ring-1 focus-within:ring-[#5B5FC7] dark:focus-within:ring-[#7977F7] transition-all">
           
           {/* Top formatting toolbar - standard teams UI */}
-          <div className="flex items-center gap-1 p-1.5 border-b border-[var(--border-color)] bg-[#F3F2F1] dark:bg-[#292929] rounded-t-lg">
+          <div className="flex items-center gap-1 p-1.5 border-b border-[var(--border-color)] bg-[#F3F2F1] dark:bg-[#292929] rounded-t-lg relative">
             <button
               onClick={() => setFormatMenuOpen(!formatMenuOpen)}
-              className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
-              title="Format"
+              className={`p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all ${formatMenuOpen ? 'bg-[#E1DFDD] dark:bg-[#484644]' : ''}`}
+              title="Emoji"
             >
-              <Type className="w-4 h-4" />
+              <Smile className="w-4 h-4" />
             </button>
+            {formatMenuOpen && (
+              <div className="absolute bottom-full left-0 mb-1 w-64 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 p-3">
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono mb-2">Quick Emojis</p>
+                <div className="grid grid-cols-8 gap-1">
+                  {quickEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => { addFormatting(emoji); setFormatMenuOpen(false); }}
+                      className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-lg transition-all hover:scale-110"
+                      title={emoji}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="w-[1px] h-4 bg-[var(--border-color)] mx-1" />
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Bold">
+            <button onClick={() => addFormatting('bold')} className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Bold">
               <Bold className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Italic">
+            <button onClick={() => addFormatting('italic')} className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Italic">
               <Italic className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Code snippet">
+            <button onClick={() => addFormatting('code')} className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Code snippet">
               <Code className="w-4 h-4" />
-            </button>
-            <div className="w-[1px] h-4 bg-[var(--border-color)] mx-1" />
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Emoji">
-              <Smile className="w-4 h-4" />
             </button>
           </div>
 
@@ -389,6 +431,14 @@ export const ChatView = ({
           </div>
         </div>
       </div>
+      {isChannel && activeChannel && activeTeam && (
+        <InviteChannelMemberModal
+          open={inviteModalOpen}
+          channelId={activeChannel.id}
+          teamId={activeTeam.id}
+          onClose={() => setInviteModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

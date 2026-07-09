@@ -13,9 +13,10 @@ interface TaskFormProps {
   }) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  serverError?: string;
 }
 
-export function TaskForm({ selectedDate, onSave, onCancel, isSubmitting }: TaskFormProps) {
+export function TaskForm({ selectedDate, onSave, onCancel, isSubmitting, serverError }: TaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
@@ -49,10 +50,10 @@ export function TaskForm({ selectedDate, onSave, onCancel, isSubmitting }: TaskF
 
       <div className="h-[1px] bg-[#374151]/50" />
 
-      {errorMsg && (
+      {(errorMsg || serverError) && (
         <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{errorMsg}</span>
+          <span>{serverError || errorMsg}</span>
         </div>
       )}
 

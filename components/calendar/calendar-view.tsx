@@ -1,21 +1,16 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
-  Calendar, Clock, Users, Plus, ChevronLeft, ChevronRight,
-  ListTodo, CalendarDays, LayoutGrid,
+  Calendar, Clock, ChevronLeft, ChevronRight, CalendarDays, LayoutGrid,
 } from 'lucide-react';
 import { CalendarMeeting, CalendarTask, CalendarViewType } from '@/lib/types';
-import { EventForm } from './event-form';
-import { TaskForm } from '@/components/tasks/task-form';
 
 interface CalendarViewProps {
   meetings: CalendarMeeting[];
   tasks: CalendarTask[];
-  onAddMeeting: (meeting: Omit<CalendarMeeting, 'id'>) => void;
-  onAddTask: (task: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => void;
-  onJoinMeeting: (meeting: CalendarMeeting) => void;
-  selectedMeetingId?: string | null;
+  selectedDateStr: string;
+  onDateSelect: (dateStr: string) => void;
 }
 
 function getDaysInMonth(year: number, month: number): number {
@@ -53,6 +48,8 @@ function getHourSlots(): string[] {
   return slots;
 }
 
+
+
 function meetingsForDate(meetings: CalendarMeeting[], dateStr: string): CalendarMeeting[] {
   return meetings.filter((m) => m.date === dateStr);
 }
@@ -61,19 +58,19 @@ function tasksForDate(tasks: CalendarTask[], dateStr: string): CalendarTask[] {
   return tasks.filter((t) => t.date === dateStr);
 }
 
-
+function meetingsForDateAndHour(meetings: CalendarMeeting[], dateStr: string, hour: number): CalendarMeeting[] {
+  return meetings.filter((m) => {
+    if (m.date !== dateStr) return false;
+    const mHour = parseInt(m.startTime.split(':')[0], 10);
+    return mHour === hour;
+  });
+}
 
 export const CalendarView = ({
-  meetings, tasks, onAddMeeting, onAddTask, onJoinMeeting, selectedMeetingId,
+  meetings, tasks, selectedDateStr, onDateSelect,
 }: CalendarViewProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(() => {
-    const t = new Date();
-    return formatDateStr(t.getFullYear(), t.getMonth(), t.getDate());
-  });
   const [viewType, setViewType] = useState<CalendarViewType>('month');
-  const [showScheduleForm, setShowScheduleForm] = useState(false);
-  const [formMode, setFormMode] = useState<'meeting' | 'task'>('meeting');
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -81,8 +78,6 @@ export const CalendarView = ({
   const monthLabel = useMemo(() =>
     currentDate.toLocaleDateString([], { month: 'long', year: 'numeric' }),
   [currentDate]);
-
-  const selectedDate = new Date(selectedDateStr + 'T12:00:00');
 
   const navigatePrevious = () => {
     const d = new Date(currentDate);
@@ -111,52 +106,11 @@ export const CalendarView = ({
   const goToToday = () => {
     const t = new Date();
     setCurrentDate(t);
-    setSelectedDateStr(formatDateStr(t.getFullYear(), t.getMonth(), t.getDate()));
+    onDateSelect(formatDateStr(t.getFullYear(), t.getMonth(), t.getDate()));
   };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
-  const scheduleRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (scheduleRef.current && !scheduleRef.current.contains(e.target as Node)) {
-        setShowScheduleDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleDayClick = (dateStr: string) => {
-    setSelectedDateStr(dateStr);
-    setShowScheduleForm(false);
-  };
-
-  const handleScheduleClick = (mode: 'meeting' | 'task') => {
-    setFormMode(mode);
-    setShowScheduleForm(true);
-    setShowScheduleDropdown(false);
-  };
-
-  const handleFormSave = async (data: Omit<CalendarMeeting, 'id'>) => {
-    setIsSubmitting(true);
-    try {
-      await onAddMeeting(data);
-      setShowScheduleForm(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleTaskSave = async (data: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
-    setIsSubmitting(true);
-    try {
-      await onAddTask(data);
-      setShowScheduleForm(false);
-    } finally {
-      setIsSubmitting(false);
-    }
+    onDateSelect(dateStr);
   };
 
   // Month view
@@ -171,12 +125,11 @@ export const CalendarView = ({
         day: dayNum,
         dateStr,
         isToday: isToday(year, month, dayNum),
+        meetings: meetingsForDate(meetings, dateStr),
+        tasks: tasksForDate(tasks, dateStr),
       };
     }),
-  [year, month, daysInMonth]);
-
-  const activeMeetingsForSelectedDay = meetingsForDate(meetings, selectedDateStr);
-  const activeTasksForSelectedDay = tasksForDate(tasks, selectedDateStr);
+  [year, month, daysInMonth, meetings, tasks]);
 
   // Week view
   const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
@@ -205,11 +158,13 @@ export const CalendarView = ({
 
         {monthDays.map((cell) => {
           const isSel = selectedDateStr === cell.dateStr;
+          const totalItems = cell.meetings.length + cell.tasks.length;
+          const maxVisible = 2;
           return (
             <div
               key={cell.day}
               onClick={() => handleDayClick(cell.dateStr)}
-              className={`aspect-square bg-[var(--bg-secondary)] border p-1.5 rounded-xl flex flex-col cursor-pointer group transition-all relative ${
+              className={`aspect-square bg-[var(--bg-secondary)] border p-1 rounded-xl flex flex-col cursor-pointer group transition-all relative ${
                 isSel
                   ? 'border-[#6366F1] ring-1 ring-[#6366F1]/30 bg-[var(--bg-tertiary)]/50'
                   : cell.isToday
@@ -217,7 +172,7 @@ export const CalendarView = ({
                     : 'border-[var(--border-color)] hover:border-gray-500 hover:bg-[#1F2937]/30'
               }`}
             >
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md self-start ${
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md mb-0.5 self-start ${
                 cell.isToday
                   ? 'text-white bg-[#6366F1] font-bold shadow-sm'
                   : isSel
@@ -226,6 +181,42 @@ export const CalendarView = ({
               }`}>
                 {cell.day}
               </span>
+
+              {totalItems > 0 && (
+                <div className="flex-1 space-y-0.5 overflow-hidden">
+                  {cell.tasks.slice(0, maxVisible).map((t) => (
+                    <div
+                      key={t.id}
+                      className="text-[7px] px-1 py-0.5 rounded leading-tight truncate font-medium bg-amber-500/15 text-amber-400 border-l-2 border-amber-500"
+                      title={`${t.title}${t.time ? ` @ ${t.time}` : ''} (${t.priority})`}
+                    >
+                      {t.time && <span className="text-[6px] opacity-70 mr-0.5">{t.time}</span>}
+                      {t.title}
+                    </div>
+                  ))}
+                  {cell.tasks.length > 0 && cell.meetings.length > 0 && (
+                    <div className="h-px bg-[var(--border-color)] mx-1" />
+                  )}
+                  {cell.meetings.slice(0, Math.max(0, maxVisible - cell.tasks.length)).map((m) => (
+                    <div
+                      key={m.id}
+                      className={`text-[7px] px-1 py-0.5 rounded leading-tight truncate font-medium ${
+                        m.isLive
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+                      }`}
+                      title={`${m.title} ${m.startTime}-${m.endTime}`}
+                    >
+                      {m.title}
+                    </div>
+                  ))}
+                  {totalItems > maxVisible && (
+                    <div className="text-[6px] text-gray-500 font-medium px-1">
+                      +{totalItems - maxVisible} more
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -267,6 +258,47 @@ export const CalendarView = ({
           })}
         </div>
 
+        {/* All-day tasks & meetings */}
+        {weekDays.some((_, i) => {
+          const ds = weekDateStrs[i];
+          return tasksForDate(tasks, ds).length > 0 || meetingsForDate(meetings, ds).some(m => parseInt(m.startTime.split(':')[0], 10) === 0);
+        }) && (
+          <div className="grid grid-cols-8 gap-px bg-[var(--border-color)] border-b border-[var(--border-color)]">
+            <div className="bg-[var(--bg-secondary)] p-1.5 text-[8px] text-gray-500 font-mono text-right pr-2 flex items-center justify-end">
+              all-day
+            </div>
+            {weekDays.map((_, dayIdx) => {
+              const ds = weekDateStrs[dayIdx];
+              const dayTasks = tasksForDate(tasks, ds);
+              const dayMeetings = meetingsForDate(meetings, ds).filter(m => parseInt(m.startTime.split(':')[0], 10) === 0);
+              const items = [...dayTasks.map(t => ({ ...t, type: 'task' as const })), ...dayMeetings.map(m => ({ ...m, type: 'meeting' as const }))];
+              return (
+                <div
+                  key={`allday-${dayIdx}`}
+                  onClick={() => handleDayClick(ds)}
+                  className="bg-[var(--bg-primary)] p-1 cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors min-h-[28px]"
+                >
+                  {items.slice(0, 2).map((item) => (
+                    <div
+                      key={item.id}
+                      className={`text-[7px] px-1 py-0.5 rounded mb-0.5 truncate font-medium ${
+                        item.type === 'task'
+                          ? 'bg-amber-500/15 text-amber-400 border-l-2 border-amber-500'
+                          : item.isLive
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-indigo-500/10 text-indigo-300'
+                      }`}
+                    >
+                      {item.title}
+                    </div>
+                  ))}
+                  {items.length > 2 && <div className="text-[6px] text-gray-500 px-1">+{items.length - 2} more</div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-8 gap-px bg-[var(--border-color)]">
             {hourSlots.map((hour) => (
@@ -276,12 +308,26 @@ export const CalendarView = ({
                 </div>
                 {weekDays.map((_, dayIdx) => {
                   const ds = weekDateStrs[dayIdx];
+                  const dayMeetings = meetingsForDateAndHour(meetings, ds, parseInt(hour.split(':')[0], 10));
                   return (
                     <div
                       key={`${hour}-${dayIdx}`}
                       onClick={() => handleDayClick(ds)}
                       className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors"
-                    />
+                    >
+                      {dayMeetings.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`text-[8px] px-1 py-0.5 rounded mb-0.5 truncate font-medium ${
+                            m.isLive
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-indigo-500/10 text-indigo-300'
+                          }`}
+                        >
+                          {m.title}
+                        </div>
+                      ))}
+                    </div>
                   );
                 })}
               </div>
@@ -293,280 +339,138 @@ export const CalendarView = ({
   };
 
   const renderDayView = () => {
+    const dayMeetings = meetingsForDate(meetings, selectedDateStr);
+    const dayTasks = tasksForDate(tasks, selectedDateStr);
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-[var(--border-color)]">
-          {dayHours.map((hour) => (
-            <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
-              <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
-                {hour}
+        {dayTasks.length > 0 && (
+          <div className="border-b border-amber-500/20 bg-amber-500/[0.02] px-4 py-2 space-y-1">
+            <p className="text-[10px] font-bold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> Tasks
+            </p>
+            {dayTasks.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 text-xs bg-amber-500/10 border-l-2 border-amber-500 rounded px-3 py-1.5">
+                {t.time && <span className="text-[10px] text-amber-400 font-mono flex-shrink-0">{t.time}</span>}
+                <span className="text-[var(--text-primary)] font-medium">{t.title}</span>
+                <span className={`text-[9px] font-bold ml-auto ${t.priority === 'HIGH' ? 'text-rose-400' : t.priority === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'}`}>{t.priority}</span>
               </div>
-              <div className="flex-1 p-1" />
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
+        <div className="divide-y divide-[var(--border-color)]">
+          {dayHours.map((hour) => {
+            const hourNum = parseInt(hour.split(':')[0], 10);
+            const hourMeetings = dayMeetings.filter((m) => parseInt(m.startTime.split(':')[0], 10) === hourNum);
+            return (
+              <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
+                <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
+                  {hour}
+                </div>
+                <div className="flex-1 p-1 space-y-0.5">
+                  {hourMeetings.map((m) => (
+                    <div key={m.id} className={`text-xs p-2 rounded-lg border ${m.isLive ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-indigo-500/5 border-indigo-500/20 text-indigo-300'}`}>
+                      <div className="font-semibold text-[var(--text-primary)]">{m.title}</div>
+                      <div className="text-[10px] text-[var(--text-secondary)] flex items-center gap-2 mt-0.5">
+                        <Clock className="w-3 h-3" />
+                        <span>{m.startTime} - {m.endTime}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   };
 
-  const renderAgendaDrawer = () => (
-    <div className="w-full md:w-[320px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col flex-shrink-0 h-full overflow-y-auto">
-      {!showScheduleForm ? (
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between pb-1">
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Daily Agenda</h3>
-              <p className="text-[10px] text-[var(--text-secondary)] font-mono mt-0.5">
-                {selectedDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
+  const selectedDate = new Date(selectedDateStr + 'T12:00:00');
+
+  return (
+    <div className="flex-1 bg-[var(--bg-primary)] flex flex-col h-full overflow-hidden">
+      <div className="p-3 sm:p-5 pb-0 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:flex p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[#6366F1]">
+              <Calendar className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-1">
-              <div ref={scheduleRef} className="relative">
-                <button
-                  onClick={() => setShowScheduleDropdown(!showScheduleDropdown)}
-                  className="bg-[#6366F1] text-white px-3 py-2 rounded-xl hover:bg-[#5053e1] transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  title="Schedule"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Schedule
-                </button>
-                {showScheduleDropdown && (
-                  <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
-                    <button
-                      onClick={() => handleScheduleClick('meeting')}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                      Schedule Meeting
-                    </button>
-                    <button
-                      onClick={() => handleScheduleClick('task')}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-                    >
-                      <ListTodo className="w-3.5 h-3.5 text-emerald-400" />
-                      Add Task
-                    </button>
-                  </div>
-                )}
-              </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight">
+                {viewType === 'day'
+                  ? formatDayLabel(selectedDate)
+                  : monthLabel}
+              </h2>
+              <p className="text-[10px] sm:text-xs text-[var(--text-secondary)] font-mono">Teams Scheduler Sync</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-0.5">
               <button
-                onClick={() => {}}
-                className="p-2 rounded-xl border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
-                title="Meeting Admin"
+                onClick={() => setViewType('month')}
+                className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'month' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                title="Month view"
               >
-                <Users className="w-4 h-4" />
+                <LayoutGrid className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewType('week')}
+                className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'week' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                title="Week view"
+              >
+                <CalendarDays className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewType('day')}
+                className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'day' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
+                title="Day view"
+              >
+                <Calendar className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={navigatePrevious}
+                className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
+              >
+                <ChevronLeft className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+              </button>
+              <button
+                onClick={goToToday}
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
+              >
+                Today
+              </button>
+              <button
+                onClick={navigateNext}
+                className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
+              >
+                <ChevronRight className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
               </button>
             </div>
           </div>
-
-          <div className="h-[1px] bg-[#374151]/50" />
-
-          <div className="space-y-3">
-            {activeTasksForSelectedDay.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold text-amber-400 font-mono uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <ListTodo className="w-3 h-3" /> Tasks
-                </p>
-                {activeTasksForSelectedDay.map((t) => (
-                  <div
-                    key={t.id}
-                    className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 mb-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="text-xs font-semibold text-[var(--text-primary)]">{t.title}</h4>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${
-                        t.priority === 'HIGH' ? 'text-rose-400 bg-rose-500/10' :
-                        t.priority === 'MEDIUM' ? 'text-amber-400 bg-amber-500/10' :
-                        'text-emerald-400 bg-emerald-500/10'
-                      }`}>
-                        {t.priority}
-                      </span>
-                    </div>
-                    {t.time && (
-                      <div className="flex items-center gap-1 mt-2 text-[10px] text-[var(--text-secondary)] font-mono">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        <span>Due by {t.time}</span>
-                      </div>
-                    )}
-                    {t.assigneeName && (
-                      <p className="text-[10px] text-[var(--text-secondary)] mt-1.5">Assignee: {t.assigneeName}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeMeetingsForSelectedDay.length === 0 && activeTasksForSelectedDay.length === 0 ? (
-              <div className="py-8 text-center select-none space-y-2">
-                <div className="w-12 h-12 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-gray-500 mx-auto">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] font-medium">Nothing scheduled</p>
-                <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto">
-                  Click Schedule to add a meeting or task.
-                </p>
-              </div>
-            ) : (
-              activeMeetingsForSelectedDay.map((meet) => (
-                <div
-                  key={meet.id}
-                  className={`p-3.5 rounded-xl border relative transition-all ${
-                    selectedMeetingId === meet.id
-                      ? 'bg-[var(--bg-tertiary)] border-[#6366F1]'
-                      : meet.isLive
-                        ? 'bg-emerald-500/5 border-emerald-500/20'
-                        : 'bg-[var(--bg-tertiary)]/30 border-[var(--border-color)]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{meet.title}</h4>
-                    {meet.isLive && (
-                      <span className="flex-shrink-0 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                        Active
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-[var(--text-secondary)] font-mono">
-                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{meet.startTime} - {meet.endTime}</span>
-                  </div>
-
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-2 leading-relaxed">{meet.description}</p>
-
-                  <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[var(--border-color)]">
-                    <Users className="w-3.5 h-3.5 text-gray-500" />
-                    <p className="text-[9px] text-indigo-300 font-semibold truncate leading-none">
-                      {meet.attendees.join(', ')}
-                    </p>
-                  </div>
-
-                  {meet.isLive && (
-                    <button
-                      onClick={() => onJoinMeeting(meet)}
-                      className="w-full mt-3 bg-[#6366F1] text-white py-2 rounded-xl hover:bg-[#5053e1] transition-all text-[11px] font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Join Active Call
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      ) : formMode === 'meeting' ? (
-        <div className="p-4">
-          <EventForm
-            selectedDate={selectedDateStr}
-            existingMeetings={meetings}
-            onSave={handleFormSave}
-            onCancel={() => setShowScheduleForm(false)}
-            isSubmitting={isSubmitting}
-          />
-        </div>
-      ) : (
-        <div className="p-4">
-          <TaskForm
-            selectedDate={selectedDateStr}
-            onSave={handleTaskSave}
-            onCancel={() => setShowScheduleForm(false)}
-            isSubmitting={isSubmitting}
-          />
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="flex-1 bg-[var(--bg-primary)] flex flex-col md:flex-row h-full overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-3 sm:p-5 pb-0 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:flex p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[#6366F1]">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight">
-                  {viewType === 'day'
-                    ? formatDayLabel(selectedDate)
-                    : monthLabel}
-                </h2>
-                <p className="text-[10px] sm:text-xs text-[var(--text-secondary)] font-mono">Teams Scheduler Sync</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="flex items-center gap-0.5 sm:gap-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewType('month')}
-                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'month' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
-                  title="Month view"
-                >
-                  <LayoutGrid className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewType('week')}
-                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'week' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
-                  title="Week view"
-                >
-                  <CalendarDays className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewType('day')}
-                  className={`p-1 sm:p-1.5 rounded-md transition-colors ${viewType === 'day' ? 'bg-[#6366F1] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'} cursor-pointer`}
-                  title="Day view"
-                >
-                  <Calendar className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={navigatePrevious}
-                  className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
-                >
-                  <ChevronLeft className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-                </button>
-                <button
-                  onClick={goToToday}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] cursor-pointer"
-                >
-                  Today
-                </button>
-                <button
-                  onClick={navigateNext}
-                  className="p-1 sm:p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer hover:bg-[#1F2937]"
-                >
-                  <ChevronRight className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-3 sm:p-5 pt-2 sm:pt-3 overflow-hidden">
-          {viewType === 'month' && (
-            <div className="h-full overflow-y-auto">
-              {renderMonthView()}
-            </div>
-          )}
-          {viewType === 'week' && (
-            <div className="h-full">
-              {renderWeekView()}
-            </div>
-          )}
-          {viewType === 'day' && (
-            <div className="h-full">
-              {renderDayView()}
-            </div>
-          )}
         </div>
       </div>
 
-      {renderAgendaDrawer()}
+      <div className="flex-1 p-3 sm:p-5 pt-2 sm:pt-3 overflow-hidden">
+        {viewType === 'month' && (
+          <div className="h-full overflow-y-auto">
+            {renderMonthView()}
+          </div>
+        )}
+        {viewType === 'week' && (
+          <div className="h-full">
+            {renderWeekView()}
+          </div>
+        )}
+        {viewType === 'day' && (
+          <div className="h-full">
+            {renderDayView()}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

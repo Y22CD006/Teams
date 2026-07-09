@@ -22,12 +22,41 @@ export async function GET(req: NextRequest) {
   });
 
   let subscriber: import("ioredis").Redis | null = null;
+  let closed = false;
 
   const stream = new ReadableStream({
     async start(controller) {
       subscriber = r.duplicate();
+      subscriber.options.maxRetriesPerRequest = null;
+      subscriber.options.retryStrategy = (times: number) => Math.min(times * 200, 10000);
+
+      let redisChannels: string[] = [];
+
+      const subscribeChannels = async () => {
+        if (redisChannels.length > 0) {
+          try {
+            await subscriber!.subscribe(...redisChannels);
+          } catch (err) {
+            console.error("Redis re-subscribe error:", err);
+          }
+        }
+      };
+
+      subscriber.on("message", (_channel, message) => {
+        if (closed) return;
+        try {
+          controller.enqueue(`data: ${message}\n\n`);
+        } catch {
+          // stream closed
+        }
+      });
+
+      subscriber.on("reconnecting", () => {
+        console.log("[SSE] Redis subscriber reconnecting...");
+      });
 
       const pingInterval = setInterval(() => {
+        if (closed) { clearInterval(pingInterval); return; }
         try {
           controller.enqueue(`: ping\n\n`);
         } catch {
@@ -47,33 +76,33 @@ export async function GET(req: NextRequest) {
           })
         ]);
 
-        const redisChannels = [
+        redisChannels = [
           ...dmMemberships.map(d => `message:${d.dmId}`),
           ...teamMemberships.flatMap(m => m.team.channels.map(c => `message:${c.id}`))
         ];
 
         if (redisChannels.length > 0) {
           await subscriber.subscribe(...redisChannels);
-          subscriber.on("message", (_channel, message) => {
-            try {
-              controller.enqueue(`data: ${message}\n\n`);
-            } catch {
-              // stream closed
-            }
-          });
         }
       } catch (err) {
         console.error("Redis subscription error:", err);
-        controller.error(err);
+        try { controller.error(err); } catch {}
       }
 
+      subscriber.on("ready", () => {
+        if (closed) return;
+        subscribeChannels();
+      });
+
       req.signal.addEventListener("abort", () => {
+        closed = true;
         clearInterval(pingInterval);
         subscriber?.unsubscribe().catch(() => {});
         subscriber?.disconnect();
       });
     },
     cancel() {
+      closed = true;
       subscriber?.unsubscribe().catch(() => {});
       subscriber?.disconnect();
     },

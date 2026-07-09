@@ -36,6 +36,7 @@ export interface Message {
   isPinned?: boolean;
   isCallNotification?: boolean;
   callDuration?: string;
+  meetingRoom?: string;
 }
 
 export interface ThreadReply {
@@ -85,6 +86,9 @@ export interface CalendarMeeting {
   description: string;
   attendees: string[];
   isLive?: boolean;
+  roomName?: string;
+  token?: string;
+  serverUrl?: string;
 }
 
 export type CalendarViewType = 'month' | 'week' | 'day';

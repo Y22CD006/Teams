@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   const enc = new TextEncoder();
 
   let subscriber: import("ioredis").Redis | null = null;
+  let closed = false;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -33,9 +34,21 @@ export async function GET(req: NextRequest) {
       }
 
       subscriber = redis.duplicate();
+      subscriber.options.maxRetriesPerRequest = null;
+      subscriber.options.retryStrategy = (times: number) => Math.min(times * 200, 10000);
+
+      const doSubscribe = () => {
+        subscriber!.subscribe(channelName).catch((err) => {
+          if (closed) return;
+          try {
+            controller.enqueue(enc.encode(`event: error\ndata: ${err.message}\n\n`));
+          } catch {}
+          try { controller.close(); } catch {}
+        });
+      };
 
       subscriber.on("message", (ch, message) => {
-        if (ch === channelName) {
+        if (ch === channelName && !closed) {
           try {
             controller.enqueue(enc.encode(`data: ${message}\n\n`));
           } catch {
@@ -44,20 +57,23 @@ export async function GET(req: NextRequest) {
         }
       });
 
-      subscriber.subscribe(channelName).catch((err) => {
-        controller.enqueue(enc.encode(`event: error\ndata: ${err.message}\n\n`));
-        controller.close();
+      subscriber.on("ready", () => {
+        if (!closed) doSubscribe();
       });
+
+      doSubscribe();
 
       controller.enqueue(enc.encode("retry: 2000\n\n"));
       controller.enqueue(enc.encode("event: connected\ndata: {}\n\n"));
 
       req.signal.addEventListener("abort", () => {
+        closed = true;
         subscriber?.unsubscribe(channelName).catch(() => {});
         subscriber?.disconnect();
       });
     },
     cancel() {
+      closed = true;
       subscriber?.unsubscribe(channelName).catch(() => {});
       subscriber?.disconnect();
     },

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -13,6 +13,16 @@ export function CreateTeamModal({ open, onClose, onCreated }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setCreating(false);
+      setError("");
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -20,17 +30,25 @@ export function CreateTeamModal({ open, onClose, onCreated }: Props) {
     e.preventDefault();
     if (!name.trim()) return;
     setCreating(true);
-    const res = await fetch("/api/teams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), description: description.trim() }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      onCreated(data.team);
+    setError("");
+    try {
+      const res = await fetch("/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onCreated(data.team);
+        onClose();
+      } else {
+        const err = await res.text();
+        setError(err || "Failed to create team");
+      }
+    } catch (e: any) {
+      setError(e.message || "Failed to create team");
     }
     setCreating(false);
-    onClose();
   };
 
   return (
@@ -41,6 +59,12 @@ export function CreateTeamModal({ open, onClose, onCreated }: Props) {
           <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-lg">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">Team Name</label>
             <input

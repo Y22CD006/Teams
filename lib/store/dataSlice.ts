@@ -193,6 +193,9 @@ const dataSlice = createSlice({
     addMeeting(state, action: PayloadAction<CalendarMeeting>) {
       state.meetings.push(action.payload);
     },
+    deleteMeeting(state, action: PayloadAction<string>) {
+      state.meetings = state.meetings.filter((m) => m.id !== action.payload);
+    },
     addTask(state, action: PayloadAction<CalendarTask>) {
       state.tasks.push(action.payload);
     },
@@ -224,6 +227,6 @@ export const {
   setChats, setTeams, addChat, addTeam, addChannel,
   addMessage, markAsRead, addReaction, deleteMessage, addReply,
   removeTeam, removeChannel,
-  addMeeting, addTask, updateTaskStatus, deleteTask,
+  addMeeting, deleteMeeting, addTask, updateTaskStatus, deleteTask,
 } = dataSlice.actions;
 export default dataSlice.reducer;

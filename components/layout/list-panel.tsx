@@ -1,11 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, Hash, Lock, PhoneCall, Video, Star, FileText, UserPlus, Clock, ChevronDown, ChevronRight, BellRing, Settings as SettingsIcon, Check, X, UserCheck, UserX, Loader2, Trash2, Edit3, Filter, Edit, MoreHorizontal } from 'lucide-react';
-import { Chat, Team, CalendarMeeting, FileItem, User } from '@/lib/types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, Plus, Hash, Lock, PhoneCall, Video, Star, FileText, UserPlus, Clock, ChevronDown, ChevronRight, BellRing, Settings as SettingsIcon, Check, X, UserCheck, UserX, Loader2, Trash2, Edit3, Filter, Edit, MoreHorizontal, Calendar, ListTodo, Users } from 'lucide-react';
+import { Chat, Team, FileItem, User, CalendarMeeting, CalendarTask } from '@/lib/types';
+import { EventForm } from '@/components/calendar/event-form';
+import { TaskForm } from '@/components/tasks/task-form';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { CreateChannelModal } from '@/components/teams/create-channel-modal';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { useAppDispatch } from '@/lib/store/hooks';
+import { addTeam, addChannel, removeTeam, removeChannel } from '@/lib/store/dataSlice';
 
 interface ListPanelProps {
   activeView: string;
@@ -13,18 +17,24 @@ interface ListPanelProps {
   teams: Team[];
   activeChatId: string | null;
   activeChannelId: string | null;
-  meetings: CalendarMeeting[];
   files: FileItem[];
   currentUserId: string;
   allUsers: User[];
-  onSelectChat: (id: string) => void;
-  onSelectChannel: (teamId: string, channelId: string) => void;
+  onSelectChat: (chatId: string) => void;
+  onSelectChannel: (channelId: string, teamId: string) => void;
   onSelectFileView: (view: string) => void;
-  onJoinMeeting: (meeting: CalendarMeeting) => void;
   onNewChat: () => void;
   onNewMeeting: () => void;
   onDialCall: (userName: string, isVideo: boolean) => void;
-  onSelectMeeting: (meetingId: string) => void;
+  meetings?: CalendarMeeting[];
+  tasks?: CalendarTask[];
+  selectedCalendarDate?: string;
+  onAddMeeting?: (meeting: Omit<CalendarMeeting, 'id'>) => void;
+  onAddTask?: (task: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => void;
+  onDeleteMeeting?: (meetingId: string) => void;
+  onDeleteTask?: (taskId: string) => void;
+  onJoinMeeting?: (meeting: CalendarMeeting) => void;
+  selectedMeetingId?: string | null;
 }
 
 function formatTimeAgo(iso: string): string {
@@ -55,19 +65,26 @@ export const ListPanel = ({
   teams,
   activeChatId,
   activeChannelId,
-  meetings,
   files,
   currentUserId,
   allUsers,
   onSelectChat,
   onSelectChannel,
   onSelectFileView,
-  onJoinMeeting,
   onNewChat,
   onNewMeeting,
   onDialCall,
-  onSelectMeeting,
+  meetings,
+  tasks,
+  selectedCalendarDate,
+  onAddMeeting,
+  onAddTask,
+  onDeleteMeeting,
+  onDeleteTask,
+  onJoinMeeting,
+  selectedMeetingId,
 }: ListPanelProps) => {
+  const dispatch = useAppDispatch();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({
     'team-1': true,
@@ -76,6 +93,23 @@ export const ListPanel = ({
   const [expandedPinned, setExpandedPinned] = useState(true);
   const [expandedRecent, setExpandedRecent] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [showCalendarForm, setShowCalendarForm] = useState(false);
+  const [calendarFormMode, setCalendarFormMode] = useState<'meeting' | 'task'>('meeting');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [serverError, setServerError] = useState('');
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
+  const scheduleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (scheduleRef.current && !scheduleRef.current.contains(e.target as Node)) {
+        setShowScheduleDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetch('/api/notifications')
@@ -88,6 +122,7 @@ export const ListPanel = ({
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [membersModalTeam, setMembersModalTeam] = useState<string | null>(null);
   const [loadingMembers, setLoadingMembers] = useState<string | null>(null);
+  const [deletingTeam, setDeletingTeam] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'team' | 'channel'; id: string; teamId?: string } | null>(null);
 
   const [callInput, setCallInput] = useState('');
@@ -205,11 +240,6 @@ export const ListPanel = ({
     team.name.toLowerCase().includes(searchQuery.toLowerCase()) || team.channels.length > 0
   );
 
-  const filteredMeetings = meetings.filter(meet =>
-    meet.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    meet.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const getPanelHeader = () => {
     switch (activeView) {
       case 'activity':
@@ -262,13 +292,33 @@ export const ListPanel = ({
         return (
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
             <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight">Calendar</h2>
-            <button 
-              id="btn-new-meeting"
-              onClick={onNewMeeting}
-              className="bg-[#6366F1] text-white px-2.5 py-1.5 rounded-lg hover:bg-[#5053e1] transition-all text-xs font-semibold flex items-center gap-1 shadow-md shadow-indigo-950/40"
-            >
-              <Plus className="w-3.5 h-3.5" /> Schedule
-            </button>
+            <div ref={scheduleRef} className="relative">
+              <button
+                id="btn-new-meeting"
+                onClick={() => setShowScheduleDropdown(!showScheduleDropdown)}
+                className="bg-[#6366F1] text-white px-2.5 py-1.5 rounded-lg hover:bg-[#5053e1] transition-all text-xs font-semibold flex items-center gap-1 shadow-md shadow-indigo-950/40 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Schedule
+              </button>
+              {showScheduleDropdown && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
+                  <button
+                    onClick={() => { setCalendarFormMode('meeting'); setShowCalendarForm(true); setShowScheduleDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    Schedule Meeting
+                  </button>
+                  <button
+                    onClick={() => { setCalendarFormMode('task'); setShowCalendarForm(true); setShowScheduleDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                  >
+                    <ListTodo className="w-3.5 h-3.5 text-emerald-400" />
+                    Add Task
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         );
       case 'calls':
@@ -321,6 +371,176 @@ export const ListPanel = ({
       )}
 
       <div id="list-panel-scrollbar" className="flex-1 overflow-y-auto p-2 space-y-1">
+        
+        {activeView === 'calendar' && !showCalendarForm && (
+          <div className="space-y-3 p-1">
+            {selectedCalendarDate && (
+              <div className="text-[10px] text-[var(--text-secondary)] font-mono font-semibold px-1">
+                {new Date(selectedCalendarDate + 'T12:00:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+              </div>
+            )}
+            {tasks && selectedCalendarDate && tasks.filter(t => t.date === selectedCalendarDate).length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-amber-400 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1 px-1">
+                  <ListTodo className="w-3 h-3" /> Tasks
+                </p>
+                {tasks.filter(t => t.date === selectedCalendarDate).map((t) => (
+                  <div key={t.id} className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 mb-1.5 group/task">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-xs font-semibold text-[var(--text-primary)]">{t.title}</h4>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          t.priority === 'HIGH' ? 'text-rose-400 bg-rose-500/10' :
+                          t.priority === 'MEDIUM' ? 'text-amber-400 bg-amber-500/10' :
+                          'text-emerald-400 bg-emerald-500/10'
+                        }`}>
+                          {t.priority}
+                        </span>
+                        {onDeleteTask && (
+                          <button
+                            onClick={async () => {
+                              setDeletingId(t.id);
+                              try { await onDeleteTask(t.id); } finally { setDeletingId(null); }
+                            }}
+                            disabled={deletingId === t.id}
+                            className="opacity-0 group-hover/task:opacity-100 text-gray-500 hover:text-rose-400 p-1 rounded transition-all disabled:opacity-50"
+                            title="Delete task"
+                          >
+                            {deletingId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {t.time && (
+                      <div className="flex items-center gap-1 mt-1.5 text-[10px] text-[var(--text-secondary)] font-mono">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Due by {t.time}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {meetings && selectedCalendarDate && meetings.filter(m => m.date === selectedCalendarDate).length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-indigo-400 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1 px-1">
+                  <Calendar className="w-3 h-3" /> Meetings
+                </p>
+                {meetings.filter(m => m.date === selectedCalendarDate).map((meet) => (
+                  <div key={meet.id} className={`p-2.5 rounded-xl border transition-all group/meet ${
+                    selectedMeetingId === meet.id
+                      ? 'bg-[var(--bg-tertiary)] border-[#6366F1]'
+                      : meet.isLive
+                        ? 'bg-emerald-500/5 border-emerald-500/20'
+                        : 'bg-[var(--bg-tertiary)]/30 border-[var(--border-color)]'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{meet.title}</h4>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {meet.isLive && (
+                          <span className="flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/20">
+                            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                            Live
+                          </span>
+                        )}
+                        {onDeleteMeeting && (
+                          <button
+                            onClick={async () => {
+                              setDeletingId(meet.id);
+                              try { await onDeleteMeeting(meet.id); } finally { setDeletingId(null); }
+                            }}
+                            disabled={deletingId === meet.id}
+                            className="opacity-0 group-hover/meet:opacity-100 text-gray-500 hover:text-rose-400 p-1 rounded transition-all disabled:opacity-50"
+                            title="Delete meeting"
+                          >
+                            {deletingId === meet.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-[var(--text-secondary)] font-mono">
+                      <Clock className="w-3 h-3 text-indigo-400" />
+                      <span>{meet.startTime} - {meet.endTime}</span>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-1 leading-relaxed line-clamp-2">{meet.description}</p>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <Users className="w-3 h-3 text-gray-500" />
+                      <p className="text-[8px] text-indigo-300 font-semibold truncate">{meet.attendees.join(', ')}</p>
+                    </div>
+                    {meet.isLive && onJoinMeeting && (
+                      <button
+                        onClick={() => onJoinMeeting(meet)}
+                        className="w-full mt-2 bg-[#6366F1] text-white py-1.5 rounded-lg hover:bg-[#5053e1] transition-all text-[10px] font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Video className="w-3 h-3" />
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                        Join Active Call
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {tasks && meetings && selectedCalendarDate && tasks.filter(t => t.date === selectedCalendarDate).length === 0 && meetings.filter(m => m.date === selectedCalendarDate).length === 0 && (
+              <div className="py-6 text-center select-none space-y-2">
+                <div className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center text-gray-500 mx-auto">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] font-medium">Nothing scheduled</p>
+                <p className="text-[10px] text-gray-500 max-w-[180px] mx-auto">
+                  Click Schedule to add a meeting or task.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeView === 'calendar' && showCalendarForm && calendarFormMode === 'meeting' && (
+          <div className="p-3">
+            <EventForm
+              selectedDate={selectedCalendarDate || ''}
+              existingMeetings={meetings || []}
+              onSave={async (data) => {
+                setIsSubmitting(true);
+                setServerError('');
+                try {
+                  await onAddMeeting?.(data);
+                  setShowCalendarForm(false);
+                } catch (e: any) {
+                  setServerError(e.message || 'Failed to create meeting');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              onCancel={() => { setShowCalendarForm(false); setServerError(''); }}
+              isSubmitting={isSubmitting}
+              serverError={serverError}
+            />
+          </div>
+        )}
+
+        {activeView === 'calendar' && showCalendarForm && calendarFormMode === 'task' && (
+          <div className="p-3">
+            <TaskForm
+              selectedDate={selectedCalendarDate || ''}
+              onSave={async (data) => {
+                setIsSubmitting(true);
+                setServerError('');
+                try {
+                  await onAddTask?.(data);
+                  setShowCalendarForm(false);
+                } catch (e: any) {
+                  setServerError(e.message || 'Failed to create task');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              onCancel={() => { setShowCalendarForm(false); setServerError(''); }}
+              isSubmitting={isSubmitting}
+              serverError={serverError}
+            />
+          </div>
+        )}
         
         {activeView === 'activity' && (
           <div className="space-y-1.5">
@@ -564,54 +784,6 @@ export const ListPanel = ({
                       );
                     })}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeView === 'calendar' && (
-          <div className="space-y-2">
-            <div className="px-2 py-1.5 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">
-              Today's Schedule
-            </div>
-            {filteredMeetings.map((meeting) => (
-              <div
-                key={meeting.id}
-                onClick={() => onSelectMeeting(meeting.id)}
-                className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                  meeting.isLive 
-                    ? 'bg-[var(--bg-tertiary)] border-[#6366F1]/50 ring-1 ring-[#6366F1]/30' 
-                    : 'bg-[var(--bg-secondary)] border-[var(--border-color)] hover:bg-[#1F2937] hover:border-[#374151]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-1.5">
-                  <h4 className="text-xs font-semibold text-[var(--text-primary)] leading-tight line-clamp-2">
-                    {meeting.title}
-                  </h4>
-                  {meeting.isLive && (
-                    <span className="flex-shrink-0 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                      Active
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-[var(--text-secondary)] font-mono">
-                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{meeting.startTime} - {meeting.endTime}</span>
-                </div>
-
-                {meeting.isLive && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onJoinMeeting(meeting);
-                    }}
-                    className="w-full mt-3 bg-[#6366F1] text-white py-1.5 rounded-lg hover:bg-[#5053e1] transition-all text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <Video className="w-3.5 h-3.5" /> Join Call
-                  </button>
                 )}
               </div>
             ))}
@@ -867,7 +1039,7 @@ export const ListPanel = ({
         open={teamCreateOpen}
         onClose={() => setTeamCreateOpen(false)}
         onCreated={(team) => {
-          // The dataSlice will refetch on next mount; for now just close
+          dispatch(addTeam(team));
           setTeamCreateOpen(false);
         }}
       />
@@ -877,7 +1049,7 @@ export const ListPanel = ({
         onClose={() => setChannelCreateInfo({ open: false, teamId: '' })}
         teamId={channelCreateInfo.teamId}
         onCreated={(channel) => {
-          // Channel will appear on next data fetch
+          dispatch(addChannel({ teamId: channelCreateInfo.teamId, channel }));
         }}
       />
 
@@ -917,10 +1089,17 @@ export const ListPanel = ({
         message="Are you sure you want to delete this team? All channels and messages will be permanently removed."
         confirmLabel="Delete Team"
         variant="danger"
+        loading={deletingTeam}
         onConfirm={async () => {
           if (!deleteConfirm || deleteConfirm.type !== 'team') return;
-          await fetch(`/api/teams/${deleteConfirm.id}`, { method: 'DELETE' });
-          setDeleteConfirm(null);
+          setDeletingTeam(true);
+          try {
+            await fetch(`/api/teams/${deleteConfirm.id}`, { method: 'DELETE' });
+            dispatch(removeTeam(deleteConfirm.id));
+            setDeleteConfirm(null);
+          } finally {
+            setDeletingTeam(false);
+          }
         }}
         onCancel={() => setDeleteConfirm(null)}
       />
@@ -934,6 +1113,9 @@ export const ListPanel = ({
         onConfirm={async () => {
           if (!deleteConfirm || deleteConfirm.type !== 'channel') return;
           await fetch(`/api/channels/${deleteConfirm.id}`, { method: 'DELETE' });
+          if (deleteConfirm.teamId) {
+            dispatch(removeChannel({ teamId: deleteConfirm.teamId, channelId: deleteConfirm.id }));
+          }
           setDeleteConfirm(null);
         }}
         onCancel={() => setDeleteConfirm(null)}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState, FormEvent, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,8 +26,7 @@ export default function LoginPage() {
     const data = await res.json();
 
     if (res.ok) {
-      router.push("/");
-      router.refresh();
+      window.location.href = redirectTo;
     } else {
       setError(data.error || "Login failed");
       setLoading(false);
@@ -37,6 +37,14 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 p-6">
         <h1 className="text-2xl font-bold text-white text-center">Sign in to Teams</h1>
+        {redirectTo !== "/" && (
+          <p className="text-xs text-[var(--text-secondary)] text-center">
+            Sign in to join the meeting
+          </p>
+        )}
+        <p className="text-[9px] text-gray-600 text-center font-mono tracking-tight">
+          Test accounts: testuser1@ex.in ~ testuser2@ex.in / test123
+        </p>
 
         {error && (
           <p className="text-sm text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{error}</p>
@@ -86,5 +94,13 @@ export default function LoginPage() {
         </p>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 interface ConfirmModalProps {
   open: boolean;
@@ -9,6 +10,7 @@ interface ConfirmModalProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "danger" | "default";
+  loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -20,6 +22,7 @@ export function ConfirmModal({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   variant = "default",
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -50,13 +53,15 @@ export function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+            disabled={loading}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed ${
               variant === "danger"
                 ? "bg-rose-500 hover:bg-rose-600 text-white"
                 : "bg-[#6366F1] hover:bg-[#5053e1] text-white"
             }`}
           >
-            {confirmLabel}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            {loading ? "Deleting..." : confirmLabel}
           </button>
         </div>
       </div>

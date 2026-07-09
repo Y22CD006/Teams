@@ -23,7 +23,7 @@ import {
 import {
   fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
   addTeam, addChannel, removeTeam, removeChannel,
-  addMeeting, addTask, markAsRead
+  addMeeting, deleteMeeting, addTask, deleteTask, markAsRead
 } from "@/lib/store/dataSlice";
 
 function formatTimeAgo(iso: string): string {
@@ -58,6 +58,8 @@ export function Dashboard() {
   const threadReplies = useAppSelector((s) => s.data.threadReplies);
   const allUsers = useAppSelector((s) => s.data.allUsers);
   const loading = useAppSelector((s) => s.data.loading);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(todayStr);
   const [activityEvents, setActivityEvents] = useState<any[]>([]);
   const [activitySummary, setActivitySummary] = useState<{
     meetingsCount: number; filesCount: number; unreadCount: number;
@@ -185,6 +187,9 @@ export function Dashboard() {
 
   const handleViewChange = (view: string) => {
     dispatch(setActiveView(view));
+    if (view === "teams") {
+      dispatch(setActiveChatId(null));
+    }
     if (view !== "chat" && view !== "teams") {
       dispatch(setActiveThreadParent(null));
     }
@@ -281,32 +286,81 @@ export function Dashboard() {
     }));
   };
 
-  const handleStartCall = (isVideo: boolean) => {
+  const handleStartCall = async (isVideo: boolean) => {
     if (!currentUser) return;
-    const mockMeeting: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      title: activeView === "chat" ? `Sync Call with ${activeChat?.name}` : `Sync Call in #${activeChannel?.name}`,
-      organizer: currentUser.name,
-      date: new Date().toISOString().split("T")[0],
-      startTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-      endTime: "",
-      description: "Ad-hoc video call initiated inside conversation thread.",
-      attendees: [currentUser.name, ...allUsers.filter((u) => u.id !== currentUser.id).slice(0, 2).map((u) => u.name)],
-    };
-    dispatch(setActiveMeeting(mockMeeting));
+    try {
+      const res = await fetch("/api/livekit", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create meeting room");
+      const data = await res.json();
+      const meeting: CalendarMeeting = {
+        id: `meet-${Date.now()}`,
+        title: activeView === "chat" ? `Sync Call with ${activeChat?.name}` : `Sync Call in #${activeChannel?.name}`,
+        organizer: currentUser.name,
+        date: new Date().toISOString().split("T")[0],
+        startTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
+        endTime: "",
+        description: "Ad-hoc video call initiated inside conversation thread.",
+        attendees: [currentUser.name, ...allUsers.filter((u) => u.id !== currentUser.id).slice(0, 2).map((u) => u.name)],
+        roomName: data.room,
+        token: data.token,
+        serverUrl: data.url,
+      };
+      dispatch(setActiveMeeting(meeting));
+
+      const sysMsg: Message = {
+        id: `msg-call-${Date.now()}`,
+        senderId: "system",
+        senderName: "System Network",
+        senderAvatar: "SYS",
+        content: `${currentUser.name} started a ${isVideo ? "video" : "audio"} call`,
+        timestamp: new Date().toISOString(),
+        reactions: [],
+        isCallNotification: true,
+        meetingRoom: data.room,
+        callDuration: "0",
+      };
+      if (activeView === "chat" && activeChatId) {
+        dispatch(addMessage({ chatId: activeChatId, message: sysMsg }));
+      } else if (activeChannelId) {
+        const channelChatId = activeChannelId;
+        dispatch(addMessage({ chatId: channelChatId, message: sysMsg }));
+      }
+    } catch (e) {
+      console.error("Failed to start call:", e);
+    }
   };
 
-  const handleJoinMeeting = (meeting: CalendarMeeting) => {
+  const handleJoinMeeting = async (meeting: CalendarMeeting) => {
+    if (meeting.roomName) {
+      try {
+        const res = await fetch("/api/livekit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ room: meeting.roomName }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          dispatch(setActiveMeeting({
+            ...meeting,
+            token: data.token,
+            serverUrl: data.url,
+          }));
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to join meeting:", e);
+      }
+    }
     dispatch(setActiveMeeting(meeting));
   };
 
-  const handleLeaveCall = () => {
+  const handleLeaveCall = useCallback(() => {
     const sysMsg: Message = {
       id: `msg-sys-${Date.now()}`,
       senderId: "system",
       senderName: "System Network",
       senderAvatar: "SYS",
-      content: "Meeting call ended. Call duration: 4 minutes, 12 seconds.",
+      content: "Meeting call ended.",
       timestamp: new Date().toISOString(),
       reactions: [],
       isCallNotification: true,
@@ -316,7 +370,7 @@ export function Dashboard() {
       dispatch(addMessage({ chatId: activeChatId, message: sysMsg }));
     }
     dispatch(setActiveMeeting(null));
-  };
+  }, [activeView, activeChatId, dispatch]);
 
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
@@ -330,19 +384,29 @@ export function Dashboard() {
     dispatch(setShowSettingsModal(false));
   };
 
-  const handleDialCall = (userName: string, isVideo: boolean) => {
+  const handleDialCall = async (userName: string, isVideo: boolean) => {
     if (!currentUser) return;
-    const mockMeeting: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      title: `Outgoing Call: ${userName}`,
-      organizer: currentUser.name,
-      date: new Date().toISOString().split("T")[0],
-      startTime: "",
-      endTime: "",
-      description: "Speed dial phone sync.",
-      attendees: [currentUser.name, userName],
-    };
-    dispatch(setActiveMeeting(mockMeeting));
+    try {
+      const res = await fetch("/api/livekit", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create meeting room");
+      const data = await res.json();
+      const meeting: CalendarMeeting = {
+        id: `meet-${Date.now()}`,
+        title: `Outgoing Call: ${userName}`,
+        organizer: currentUser.name,
+        date: new Date().toISOString().split("T")[0],
+        startTime: "",
+        endTime: "",
+        description: "Speed dial phone sync.",
+        attendees: [currentUser.name, userName],
+        roomName: data.room,
+        token: data.token,
+        serverUrl: data.url,
+      };
+      dispatch(setActiveMeeting(meeting));
+    } catch (e) {
+      console.error("Failed to start dial call:", e);
+    }
   };
 
   const handleAddMeeting = async (meetDetails: Omit<CalendarMeeting, "id">) => {
@@ -361,19 +425,23 @@ export function Dashboard() {
       }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const newMeet: CalendarMeeting = {
-        id: data.event.id,
-        ...meetDetails,
-      };
-      dispatch(addMeeting(newMeet));
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || "Failed to create meeting");
     }
+
+    const data = await res.json();
+    const newMeet: CalendarMeeting = {
+      id: data.event.id,
+      ...meetDetails,
+    };
+    dispatch(addMeeting(newMeet));
   };
 
   const handleAddTask = async (taskDetails: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
-    const firstTeam = teams[0];
-    if (!firstTeam) return;
+    if (!teams.length) {
+      throw new Error("No team available. Join or create a team first.");
+    }
 
     const dueDateTime = taskDetails.dueTime
       ? `${taskDetails.dueDate}T${taskDetails.dueTime}:00`
@@ -387,22 +455,39 @@ export function Dashboard() {
         description: taskDetails.description,
         priority: taskDetails.priority,
         dueDate: dueDateTime,
-        teamId: firstTeam.id,
+        teamId: teams[0].id,
       }),
     });
 
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || "Failed to create task");
+    }
+
+    const data = await res.json();
+    const newTask: CalendarTask = {
+      id: data.task.id,
+      title: data.task.title,
+      date: taskDetails.dueDate,
+      time: taskDetails.dueTime,
+      status: data.task.status,
+      priority: data.task.priority,
+      assigneeName: null,
+    };
+    dispatch(addTask(newTask));
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    const res = await fetch(`/api/meetings/${meetingId}`, { method: "DELETE" });
     if (res.ok) {
-      const data = await res.json();
-      const newTask: CalendarTask = {
-        id: data.task.id,
-        title: data.task.title,
-        date: taskDetails.dueDate,
-        time: taskDetails.dueTime,
-        status: data.task.status,
-        priority: data.task.priority,
-        assigneeName: null,
-      };
-      dispatch(addTask(newTask));
+      dispatch(deleteMeeting(meetingId));
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    if (res.ok) {
+      dispatch(deleteTask(taskId));
     }
   };
 
@@ -486,6 +571,9 @@ export function Dashboard() {
         <MeetingView
           currentUser={currentUser}
           meetingTitle={activeMeeting.title}
+          roomName={activeMeeting.roomName || `room-${activeMeeting.id}`}
+          token={activeMeeting.token || ""}
+          serverUrl={activeMeeting.serverUrl || process.env.NEXT_PUBLIC_LIVEKIT_URL || ""}
           onLeave={handleLeaveCall}
         />
       ) : (
@@ -496,18 +584,24 @@ export function Dashboard() {
             teams={teams}
             activeChatId={activeChatId}
             activeChannelId={activeChannelId}
-            meetings={meetings}
             files={files}
             currentUserId={currentUser.id}
             allUsers={allUsers}
             onSelectChat={handleSelectChat}
             onSelectChannel={handleSelectChannel}
             onSelectFileView={(v) => dispatch(setActiveFileView(v))}
-            onJoinMeeting={handleJoinMeeting}
             onNewChat={handleNewChatTrigger}
             onNewMeeting={() => dispatch(setActiveView("calendar"))}
             onDialCall={handleDialCall}
-            onSelectMeeting={(id) => dispatch(setSelectedMeetingId(id))}
+            meetings={meetings}
+            tasks={tasks}
+            selectedCalendarDate={selectedCalendarDate}
+            onAddMeeting={handleAddMeeting}
+            onAddTask={handleAddTask}
+            onDeleteMeeting={handleDeleteMeeting}
+            onDeleteTask={handleDeleteTask}
+            onJoinMeeting={handleJoinMeeting}
+            selectedMeetingId={selectedMeetingId}
           />
 
           <div id="main-content-canvas" className="flex-1 flex overflow-hidden min-w-0 h-full relative">
@@ -521,6 +615,7 @@ export function Dashboard() {
                 onOpenThread={(m) => dispatch(setActiveThreadParent(m))}
                 onAddReaction={handleAddReaction}
                 onStartCall={handleStartCall}
+                onJoinMeeting={({ roomName }) => handleJoinMeeting({ roomName } as CalendarMeeting)}
                 onDeleteMessage={handleDeleteMessage}
               />
             )}
@@ -529,10 +624,8 @@ export function Dashboard() {
               <CalendarView
                 meetings={meetings}
                 tasks={tasks}
-                onAddMeeting={handleAddMeeting}
-                onAddTask={handleAddTask}
-                onJoinMeeting={handleJoinMeeting}
-                selectedMeetingId={selectedMeetingId}
+                selectedDateStr={selectedCalendarDate}
+                onDateSelect={setSelectedCalendarDate}
               />
             )}
 

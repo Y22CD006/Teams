@@ -8,6 +8,7 @@ interface EventFormProps {
   onSave: (meeting: Omit<CalendarMeeting, 'id'>) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  serverError?: string;
 }
 
 function generateTimeSlots(): string[] {
@@ -49,7 +50,7 @@ function suggestSlots(existing: CalendarMeeting[], date: string): string[] {
   });
 }
 
-export function EventForm({ selectedDate, existingMeetings, onSave, onCancel, isSubmitting }: EventFormProps) {
+export function EventForm({ selectedDate, existingMeetings, onSave, onCancel, isSubmitting, serverError }: EventFormProps) {
   const [title, setTitle] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -105,10 +106,10 @@ export function EventForm({ selectedDate, existingMeetings, onSave, onCancel, is
 
       <div className="h-[1px] bg-[#374151]/50" />
 
-      {errorMsg && (
+      {(errorMsg || serverError) && (
         <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{errorMsg}</span>
+          <span>{serverError || errorMsg}</span>
         </div>
       )}
 
