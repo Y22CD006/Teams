@@ -76,6 +76,7 @@ export const ListPanel = ({
   const [expandedPinned, setExpandedPinned] = useState(true);
   const [expandedRecent, setExpandedRecent] = useState(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/notifications')
@@ -192,8 +193,9 @@ export const ListPanel = ({
   };
 
   const filteredChats = chats.filter(chat => 
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.messages.some(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+    (chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chat.messages.some(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))) &&
+    (activeFilter === 'unread' ? chat.unreadCount > 0 : true)
   );
 
   const filteredTeams = teams.map(team => {
@@ -225,23 +227,60 @@ export const ListPanel = ({
         );
       case 'chat':
         return (
-          <div className="flex items-center justify-between px-4 py-3">
-            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Chat</h2>
-            <div className="flex items-center gap-1">
+          <div className="flex flex-col border-b border-[var(--border-color)]">
+            <div className="flex items-center justify-between px-4 py-3">
+              <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Chat</h2>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => alert("Filter panel opened")}
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
+                  title="Filter"
+                >
+                  <Filter className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={onNewMeeting}
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
+                  title="Video call"
+                >
+                  <Video className="w-4 h-4" />
+                </button>
+                <button 
+                  id="btn-new-chat"
+                  onClick={onNewChat}
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
+                  title="New Chat"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
               <button 
-                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
-                title="Filter"
-              >
-                <Filter className="w-4 h-4" />
-              </button>
+                onClick={() => setActiveFilter(activeFilter === 'unread' ? null : 'unread')}
+                className={`text-[11px] font-medium border rounded-full px-3 py-0.5 whitespace-nowrap transition-all ${
+                  activeFilter === 'unread' 
+                    ? 'bg-[#EBF3FC] border-transparent text-[#006CBE] dark:bg-[#2B3C5A] dark:text-[#6CB8F9]' 
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+              >Unread</button>
               <button 
-                id="btn-new-chat"
-                onClick={onNewChat}
-                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
-                title="New Chat"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
+                onClick={() => setActiveFilter(activeFilter === 'meeting' ? null : 'meeting')}
+                className={`text-[11px] font-medium border rounded-full px-3 py-0.5 whitespace-nowrap transition-all ${
+                  activeFilter === 'meeting' 
+                    ? 'bg-[#EBF3FC] border-transparent text-[#006CBE] dark:bg-[#2B3C5A] dark:text-[#6CB8F9]' 
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+              >Meeting chats</button>
+              <button 
+                onClick={() => setActiveFilter(activeFilter === 'unmuted' ? null : 'unmuted')}
+                className={`text-[11px] font-medium border rounded-full px-3 py-0.5 whitespace-nowrap transition-all ${
+                  activeFilter === 'unmuted' 
+                    ? 'bg-[#EBF3FC] border-transparent text-[#006CBE] dark:bg-[#2B3C5A] dark:text-[#6CB8F9]' 
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+              >Unmuted</button>
             </div>
           </div>
         );
@@ -376,11 +415,11 @@ export const ListPanel = ({
                 className="flex items-center gap-1.5 px-3 py-1 hover:bg-[var(--bg-tertiary)]/30 cursor-pointer rounded-lg transition-colors"
               >
                 {expandedPinned ? <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-secondary)]" />}
-                <span className="text-xs font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Pinned</span>
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Favourites</span>
               </div>
               {expandedPinned && (
                 <div className="space-y-[2px] mt-1">
-                  <p className="text-[11px] text-[var(--text-secondary)] px-8 py-1.5">No pinned chats</p>
+                  {/* Favourites empty state for now */}
                 </div>
               )}
             </div>
@@ -392,7 +431,7 @@ export const ListPanel = ({
                 className="flex items-center gap-1.5 px-3 py-1 hover:bg-[var(--bg-tertiary)]/30 cursor-pointer rounded-lg transition-colors"
               >
                 {expandedRecent ? <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" /> : <ChevronRight className="w-3.5 h-3.5 text-[var(--text-secondary)]" />}
-                <span className="text-xs font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Recent</span>
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)] group-hover/section:text-[var(--text-primary)]">Chats</span>
               </div>
               {expandedRecent && (
                 <div className="space-y-[2px] mt-1 px-1.5">

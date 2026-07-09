@@ -27,6 +27,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "emoji-picker-react": "^4.19.1",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "livekit-client": "^2.0.0",

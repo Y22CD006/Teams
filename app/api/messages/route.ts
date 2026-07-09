@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     include: {
       author: { select: { id: true, name: true, imageUrl: true, status: true, email: true } },
       reactions: { include: { user: { select: { id: true } } } },
+      _count: { select: { threadReplies: true } },
     },
     orderBy: { createdAt: "asc" },
     take: 50,
@@ -30,6 +31,7 @@ export async function GET(req: Request) {
 
   const mapped = messages.map((msg) => ({
     ...msg,
+    replyCount: msg._count.threadReplies,
     reactions: formatReactions(msg.reactions),
   }));
 

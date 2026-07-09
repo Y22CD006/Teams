@@ -25,13 +25,13 @@
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
 
-    --bg-primary: #0B0F19;
-    --bg-secondary: #111827;
-    --bg-tertiary: #1F2937;
+    --bg-primary: #292828;
+    --bg-secondary: #201F1E;
+    --bg-tertiary: #323130;
     --text-primary: #ffffff;
     --text-secondary: #9CA3AF;
     --text-muted: #6B7280;
-    --border-color: #374151;
+    --border-color: #3B3A39;
   }
 
   .light {

@@ -4,8 +4,9 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { 
   Phone, Video, Info, Smile, Send, Bold, Italic, Code, 
   MoreHorizontal, CornerUpRight, Trash2, Heart, ThumbsUp, Flame,
-  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus
+  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus, Forward, Search, Paperclip, Image as ImageIcon
 } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Chat, Team, Channel, Message, User } from '@/lib/types';
 import { useChat } from '@/hooks/use-chat';
@@ -20,6 +21,7 @@ interface ChatViewProps {
   onAddReaction: (messageId: string, emoji: string) => void;
   onStartCall: (isVideo: boolean) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onForwardMessage?: (message: Message) => void;
 }
 
 export const ChatView = ({
@@ -32,12 +34,22 @@ export const ChatView = ({
   onAddReaction,
   onStartCall,
   onDeleteMessage,
+  onForwardMessage,
 }: ChatViewProps) => {
   const [inputText, setInputText] = useState('');
-  const [showEmojiPickerId, setShowEmojiPickerId] = useState<string | null>(null);
-  const [formatMenuOpen, setFormatMenuOpen] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setInputText(prev => prev + `\n[Attached: ${file.name}]`);
+      e.target.value = '';
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -124,85 +136,60 @@ export const ChatView = ({
     <div id="chat-messages-canvas" className="flex-1 bg-[var(--bg-primary)] flex flex-col h-full overflow-hidden min-w-0">
       
       {/* Chat Header */}
-      <div id="chat-thread-header" className="border-b border-[var(--border-color)] bg-[var(--bg-primary)] flex-shrink-0 flex flex-col justify-end pt-3 px-5 relative z-10 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Avatar */}
-            {!isChannel && activeChat && (
-              <div className="w-10 h-10 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-sm flex items-center justify-center flex-shrink-0 relative">
-                {activeChat.name.charAt(0)}
-                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--bg-primary)] bg-emerald-500`} />
-              </div>
-            )}
-            
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-1.5 truncate leading-tight">
-                {isChannel && <span className="text-gray-500 font-mono">#</span>}
-                {title}
-              </h2>
-              {subtitle && (
-                <p className="text-xs text-[var(--text-secondary)] truncate">
-                  Available &bull; {subtitle}
-                </p>
-              )}
+      <div id="chat-thread-header" className="border-b border-[var(--border-color)] bg-[var(--bg-primary)] flex-shrink-0 flex items-center justify-between py-2 px-5 relative z-10">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Avatar */}
+          {!isChannel && activeChat && (
+            <div className="w-9 h-9 rounded-full bg-[#E1DFDD] dark:bg-[#484644] text-[#323130] dark:text-[#F3F2F1] font-semibold text-sm flex items-center justify-center flex-shrink-0 relative">
+              {activeChat.name.charAt(0)}
+              <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--bg-primary)] bg-emerald-500`} />
             </div>
-          </div>
-
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => onStartCall(true)}
-              className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[#5B5FC7] dark:hover:text-[#7977F7] transition-all"
-              title="Video call"
-            >
-              <Video className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => onStartCall(false)}
-              className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[#5B5FC7] dark:hover:text-[#7977F7] transition-all"
-              title="Audio call"
-            >
-              <Phone className="w-5 h-5" />
-            </button>
-            <button
-              className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[#5B5FC7] dark:hover:text-[#7977F7] transition-all"
-              title="Share screen"
-            >
-              <MonitorUp className="w-5 h-5" />
-            </button>
-            <div className="w-[1px] h-6 bg-[var(--border-color)] mx-1" />
-            <button className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Add people">
-              <Users className="w-5 h-5" />
-            </button>
-            <button className="p-2 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Pop out chat">
-              <PanelRightOpen className="w-5 h-5" />
-            </button>
+          )}
+          
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5 truncate leading-tight">
+              {isChannel && <span className="text-gray-500 font-mono">#</span>}
+              {title}
+            </h2>
           </div>
         </div>
-        
-        {/* Teams Tabs */}
-        <div className="flex gap-6 mt-2 border-none">
-          {['Chat', 'Files', 'Shared'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab.toLowerCase())}
-              className={`pb-2.5 text-sm font-semibold border-b-2 transition-all ${
-                activeTab === tab.toLowerCase()
-                  ? 'border-[#5B5FC7] dark:border-[#7977F7] text-[#5B5FC7] dark:text-[#7977F7]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-          <button className="pb-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-            <Plus className="w-4 h-4" />
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => alert("Search within chat")}
+            className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+            title="Search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => alert("More options")}
+            className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+            title="More options"
+          >
+            <MoreHorizontal className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div id="main-messages-scroller" className="flex-1 overflow-y-auto p-4 space-y-1">
-        {messages.map((msg, index) => {
+      <div id="main-messages-scroller" className="flex-1 overflow-y-auto p-4 space-y-1 flex flex-col">
+        {messages.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 mt-10">
+            <div className="w-20 h-20 rounded-full bg-[#3B3A39] flex items-center justify-center overflow-hidden mb-6 relative">
+              {currentUser.avatar ? (
+                <span className="text-3xl">{currentUser.avatar}</span>
+              ) : (
+                <span className="text-3xl text-[var(--text-primary)] font-bold">{currentUser.name.charAt(0)}</span>
+              )}
+            </div>
+            <h3 className="text-[17px] font-bold text-[var(--text-primary)] mb-2">This is your space</h3>
+            <p className="text-[13px] text-[var(--text-secondary)] text-center max-w-sm leading-relaxed">
+              This chat is just for you...with you. Use it for drafts, send files to yourself, or get to know chat features a little better.
+            </p>
+          </div>
+        ) : (
+          messages.map((msg, index) => {
           const isMe = msg.senderId === currentUser.id;
           const hasThread = (msg.replyCount || 0) > 0;
           const prevMsg = index > 0 ? messages[index - 1] : null;
@@ -289,7 +276,7 @@ export const ChatView = ({
               </div>
 
               {/* Message Hover Actions Toolbar */}
-              <div className={`absolute -top-3 ${isMe ? 'left-6' : 'right-6'} bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-1 z-20`}>
+              <div className={`absolute top-0 -translate-y-1/2 ${isMe ? 'right-4 left-auto' : 'right-4'} bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center gap-0.5 p-1 z-20`}>
                 {/* Quick Emoji Actions */}
                 {quickReactions.slice(0, 4).map((emoji) => (
                   <button
@@ -310,7 +297,18 @@ export const ChatView = ({
                 >
                   <CornerUpRight className="w-4 h-4" />
                 </button>
-                <button className="p-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="More options">
+                {onForwardMessage && (
+                  <button 
+                    onClick={() => onForwardMessage(msg)}
+                    className="p-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" 
+                    title="Forward"
+                  >
+                    <Forward className="w-4 h-4" />
+                  </button>
+                )}
+                <button 
+                  onClick={() => alert("Message options")}
+                  className="p-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="More options">
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
 
@@ -326,67 +324,81 @@ export const ChatView = ({
               </div>
             </div>
           );
-        })}
+        }))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Chat Input (Teams Style) */}
       <div className="p-4 bg-[var(--bg-primary)] flex-shrink-0">
-        <div className="bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-lg flex flex-col shadow-sm focus-within:border-[#5B5FC7] dark:focus-within:border-[#7977F7] focus-within:ring-1 focus-within:ring-[#5B5FC7] dark:focus-within:ring-[#7977F7] transition-all">
+        <div className="bg-white dark:bg-[#3B3A39] border border-[var(--border-color)] rounded-lg flex shadow-sm focus-within:border-[#5B5FC7] dark:focus-within:border-[#7977F7] transition-all px-3 py-2 items-end relative">
           
-          {/* Top formatting toolbar - standard teams UI */}
-          <div className="flex items-center gap-1 p-1.5 border-b border-[var(--border-color)] bg-[#F3F2F1] dark:bg-[#292929] rounded-t-lg">
+          <textarea
+            id="chat-message-input-field"
+            placeholder="Type a message"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-secondary)] text-[13.5px] focus:outline-none min-h-[22px] max-h-[200px] resize-none overflow-y-auto py-1"
+            rows={1}
+          />
+          
+          <div className="flex items-center gap-1.5 ml-2 mb-0.5">
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept="image/*" ref={imageInputRef} className="hidden" onChange={handleFileUpload} />
             <button
-              onClick={() => setFormatMenuOpen(!formatMenuOpen)}
-              className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
-              title="Format"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="p-1 rounded text-[var(--text-secondary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644] hover:text-[var(--text-primary)] transition-all"
+              title="Emoji"
             >
-              <Type className="w-4 h-4" />
+              <Smile className="w-4.5 h-4.5" />
             </button>
-            <div className="w-[1px] h-4 bg-[var(--border-color)] mx-1" />
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Bold">
-              <Bold className="w-4 h-4" />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1 rounded text-[var(--text-secondary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644] hover:text-[var(--text-primary)] transition-all" title="Attach">
+              <Paperclip className="w-4.5 h-4.5" />
             </button>
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Italic">
-              <Italic className="w-4 h-4" />
+            <button 
+              onClick={() => imageInputRef.current?.click()}
+              className="p-1 rounded text-[var(--text-secondary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644] hover:text-[var(--text-primary)] transition-all" title="Image">
+              <ImageIcon className="w-4.5 h-4.5" />
             </button>
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Code snippet">
-              <Code className="w-4 h-4" />
+            <button 
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="p-1 rounded text-[var(--text-secondary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644] hover:text-[var(--text-primary)] transition-all" 
+              title="More options"
+            >
+              <Plus className="w-4.5 h-4.5" />
             </button>
-            <div className="w-[1px] h-4 bg-[var(--border-color)] mx-1" />
-            <button className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Emoji">
-              <Smile className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Input Area */}
-          <div className="flex items-end px-3 py-2">
-            <textarea
-              id="chat-message-input-field"
-              placeholder="Type a new message"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              className="w-full bg-transparent text-[var(--text-primary)] placeholder-[var(--text-secondary)] text-sm focus:outline-none min-h-[40px] max-h-[200px] resize-none overflow-y-auto"
-              rows={1}
-            />
             <button
               onClick={handleSend}
               disabled={!inputText.trim()}
-              className={`p-1.5 rounded-md flex-shrink-0 transition-all ${
+              className={`p-1 rounded transition-all ml-1 ${
                 !inputText.trim()
                   ? 'text-[var(--text-secondary)] opacity-50 cursor-not-allowed'
-                  : 'text-[#5B5FC7] dark:text-[#7977F7] hover:bg-[#F3F2F1] dark:hover:bg-[#484644]'
+                  : 'text-[var(--text-primary)] hover:bg-[#F3F2F1] dark:hover:bg-[#484644]'
               }`}
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4.5 h-4.5" />
             </button>
           </div>
+
+          {/* Emoji Picker Popover */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-12 right-0 z-50 shadow-2xl rounded-lg border border-[var(--border-color)]">
+              <EmojiPicker 
+                onEmojiClick={(e) => {
+                  setInputText(prev => prev + e.emoji);
+                  setShowEmojiPicker(false);
+                }} 
+                theme="dark"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

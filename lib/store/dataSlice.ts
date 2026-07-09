@@ -182,6 +182,13 @@ const dataSlice = createSlice({
     },
     addReply(state, action: PayloadAction<ThreadReply>) {
       state.threadReplies.push(action.payload);
+      // Also increment replyCount on the parent message
+      const inc = (msgs: Message[]) => msgs.map(m => m.id === action.payload.messageId ? { ...m, replyCount: (m.replyCount || 0) + 1 } : m);
+      state.chats.forEach(c => c.messages = inc(c.messages));
+      state.teams.forEach(t => t.channels.forEach(ch => ch.messages = inc(ch.messages)));
+    },
+    setReplies(state, action: PayloadAction<ThreadReply[]>) {
+      state.threadReplies = action.payload;
     },
     removeTeam(state, action: PayloadAction<string>) {
       state.teams = state.teams.filter((t) => t.id !== action.payload);
@@ -222,7 +229,7 @@ const dataSlice = createSlice({
 
 export const {
   setChats, setTeams, addChat, addTeam, addChannel,
-  addMessage, markAsRead, addReaction, deleteMessage, addReply,
+  addMessage, markAsRead, addReaction, deleteMessage, addReply, setReplies,
   removeTeam, removeChannel,
   addMeeting, addTask, updateTaskStatus, deleteTask,
 } = dataSlice.actions;

@@ -10,6 +10,7 @@ import { MeetingView } from "@/components/meetings/meeting-view";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
 import { PeopleView } from "@/components/people/people-view";
+import { ForwardModal } from "@/components/modals/forward-modal";
 import type { Chat, Team, Channel, Message, ThreadReply, CalendarMeeting, CalendarTask, FileItem, Attachment, UserStatus } from "@/lib/types";
 import { useAppSelector, useAppDispatch } from "@/lib/store/hooks";
 import {
@@ -21,7 +22,7 @@ import {
   setSelectedMeetingId, setShowSettingsModal, toggleTheme,
 } from "@/lib/store/uiSlice";
 import {
-  fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
+  fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply, setReplies,
   addTeam, addChannel, removeTeam, removeChannel,
   addMeeting, addTask, markAsRead
 } from "@/lib/store/dataSlice";
@@ -128,15 +129,19 @@ export function Dashboard() {
       try {
         const msg = JSON.parse(event.data);
         if (msg.id) {
-          const isDm = msg.dmId != null;
-          const id = msg.dmId || msg.channelId;
+          if (msg.isReply) {
+            dispatch(addReply(msg));
+          } else {
+            const isDm = msg.dmId != null;
+            const id = msg.dmId || msg.channelId;
 
-          dispatch(addMessage({
-            chatId: isDm ? id : undefined,
-            channelId: !isDm ? id : undefined,
-            message: msg,
-            isMine: msg.senderId === currentUser.id,
-          }));
+            dispatch(addMessage({
+              chatId: isDm ? id : undefined,
+              channelId: !isDm ? id : undefined,
+              message: msg,
+              isMine: msg.senderId === currentUser.id,
+            }));
+          }
         }
       } catch (err) {
         // Ping or unparseable messages
@@ -164,6 +169,18 @@ export function Dashboard() {
       });
   }, []);
 
+  useEffect(() => {
+    if (activeThreadParent) {
+      fetch(`/api/messages/${activeThreadParent.id}/replies`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data && data.replies) {
+            dispatch(setReplies(data.replies));
+          }
+        });
+    }
+  }, [activeThreadParent, dispatch]);
+
   const activeChat = chats.find(c => c.id === activeChatId) || null;
   const activeTeam = teams.find(t => t.id === activeTeamId) || null;
   const activeChannel = activeTeam?.channels.find(ch => ch.id === activeChannelId) || null;
@@ -174,6 +191,7 @@ export function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [showNewChatPicker, setShowNewChatPicker] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState("");
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -250,19 +268,40 @@ export function Dashboard() {
     }
   };
 
-  const handleSendReply = (parentMessageId: string, content: string) => {
+  const handleForwardSubmit = async (targetType: "chat" | "channel", targetId: string) => {
+    if (!forwardingMessage) return;
+    const content = `> ${forwardingMessage.content}`;
+    const payload = targetType === "chat" ? { dmId: targetId } : { channelId: targetId };
+
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, ...payload }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (targetType === "chat") {
+        dispatch(addMessage({ chatId: targetId, message: data.message, isMine: true }));
+      } else {
+        dispatch(addMessage({ channelId: targetId, message: data.message, isMine: true }));
+      }
+    }
+    setForwardingMessage(null);
+  };
+
+  const handleSendReply = async (parentMessageId: string, content: string) => {
     if (!currentUser) return;
-    const newReply: ThreadReply = {
-      id: `reply-${Date.now()}`,
-      messageId: parentMessageId,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
-      content,
-      timestamp: new Date().toISOString(),
-      reactions: [],
-    };
-    dispatch(addReply(newReply));
+    const res = await fetch(`/api/messages/${parentMessageId}/replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      dispatch(addReply(data.reply));
+    }
   };
 
   const handleAddReaction = async (messageId: string, emoji: string) => {
@@ -522,6 +561,7 @@ export function Dashboard() {
                 onAddReaction={handleAddReaction}
                 onStartCall={handleStartCall}
                 onDeleteMessage={handleDeleteMessage}
+                onForwardMessage={(msg) => setForwardingMessage(msg)}
               />
             )}
 
@@ -830,6 +870,16 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {forwardingMessage && (
+        <ForwardModal
+          message={forwardingMessage}
+          chats={chats}
+          teams={teams}
+          onClose={() => setForwardingMessage(null)}
+          onSubmit={handleForwardSubmit}
+        />
       )}
     </div>
   );
