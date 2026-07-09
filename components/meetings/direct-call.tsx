@@ -58,10 +58,15 @@ export const DirectCallView = ({
   };
 
   useEffect(() => {
+    let isUnmounted = false;
     const startCall = async () => {
       try {
         // 1. Get Local Media
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (isUnmounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         localStream.current = stream;
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
@@ -145,11 +150,21 @@ export const DirectCallView = ({
     window.addEventListener("webrtc-signal", handleSignal);
 
     return () => {
+      isUnmounted = true;
       window.removeEventListener("webrtc-signal", handleSignal);
-      localStream.current?.getTracks().forEach((track) => track.stop());
+      stopMedia();
       peerConnection.current?.close();
     };
   }, [isCaller, targetUserId, incomingOffer]);
+
+  const stopMedia = () => {
+    if (localStream.current) {
+      localStream.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      localStream.current = null;
+    }
+  };
 
   const toggleMic = () => {
     if (localStream.current) {
@@ -166,6 +181,7 @@ export const DirectCallView = ({
   };
 
   const handleEndCall = (sendSignalEnd = true) => {
+    stopMedia();
     if (sendSignalEnd) {
       sendSignal("CALL_ENDED", {});
     }
