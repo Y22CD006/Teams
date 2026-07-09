@@ -7,6 +7,7 @@ import { ListPanel } from "@/components/layout/list-panel";
 import { ChatView } from "@/components/chat/chat-view";
 import { ThreadPanel } from "@/components/messages/thread-panel";
 import { MeetingView } from "@/components/meetings/meeting-view";
+import { DirectCallView } from "@/components/meetings/direct-call";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
 import { PeopleView } from "@/components/people/people-view";
@@ -64,6 +65,8 @@ export function Dashboard() {
     meetingsCount: number; filesCount: number; unreadCount: number;
   }>({ meetingsCount: 0, filesCount: 0, unreadCount: 0 });
   const [notifBadge, setNotifBadge] = useState(0);
+  const [incomingCall, setIncomingCall] = useState<{ senderId: string, senderName: string, senderAvatar: string, offer: any } | null>(null);
+  const [activeDirectCall, setActiveDirectCall] = useState<{ targetUserId: string, targetUserName: string, targetUserAvatar: string, isCaller: boolean, offer?: any } | null>(null);
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -128,7 +131,12 @@ export function Dashboard() {
     eventSource.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.id) {
+        if (msg.type === "WEBRTC_OFFER") {
+          setIncomingCall({ senderId: msg.senderId, senderName: msg.senderName, senderAvatar: msg.senderAvatar, offer: msg.payload.offer });
+        } else if ((msg.type && msg.type.startsWith("WEBRTC_")) || msg.type === "CALL_ENDED" || msg.type === "CALL_DECLINED") {
+          const customEvent = new CustomEvent("webrtc-signal", { detail: msg });
+          window.dispatchEvent(customEvent);
+        } else if (msg.id) {
           if (msg.isReply) {
             dispatch(addReply(msg));
           } else {
@@ -322,6 +330,21 @@ export function Dashboard() {
 
   const handleStartCall = (isVideo: boolean) => {
     if (!currentUser) return;
+    
+    // Check if it's a 1-on-1 chat
+    if (activeView === "chat" && activeChat) {
+      const targetUser = activeChat.participants.find(p => p.id !== currentUser.id);
+      if (targetUser) {
+        setActiveDirectCall({
+          targetUserId: targetUser.id,
+          targetUserName: targetUser.name,
+          targetUserAvatar: targetUser.avatar,
+          isCaller: true,
+        });
+        return;
+      }
+    }
+
     const mockMeeting: CalendarMeeting = {
       id: `meet-${Date.now()}`,
       title: activeView === "chat" ? `Sync Call with ${activeChat?.name}` : `Sync Call in #${activeChannel?.name}`,
@@ -521,7 +544,63 @@ export function Dashboard() {
         badges={badges}
       />
 
-      {activeMeeting ? (
+      {incomingCall && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#1E1E1E] border border-[#292929] rounded-2xl shadow-2xl p-6 w-full max-w-sm flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4 border border-indigo-400">
+              {incomingCall.senderAvatar ? (
+                <span className="text-3xl">{incomingCall.senderAvatar}</span>
+              ) : (
+                incomingCall.senderName.charAt(0)
+              )}
+            </div>
+            <h2 className="text-white text-xl font-semibold mb-1">{incomingCall.senderName}</h2>
+            <p className="text-gray-400 text-sm mb-8 animate-pulse">Incoming video call...</p>
+            <div className="flex gap-4 w-full">
+              <button
+                onClick={() => {
+                  fetch("/api/calls/signal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ targetUserId: incomingCall.senderId, type: "CALL_DECLINED", payload: {} })
+                  });
+                  setIncomingCall(null);
+                }}
+                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => {
+                  setActiveDirectCall({
+                    targetUserId: incomingCall.senderId,
+                    targetUserName: incomingCall.senderName,
+                    targetUserAvatar: incomingCall.senderAvatar,
+                    isCaller: false,
+                    offer: incomingCall.offer
+                  });
+                  setIncomingCall(null);
+                }}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeDirectCall ? (
+        <DirectCallView
+          currentUser={currentUser}
+          targetUserId={activeDirectCall.targetUserId}
+          targetUserName={activeDirectCall.targetUserName}
+          targetUserAvatar={activeDirectCall.targetUserAvatar}
+          isCaller={activeDirectCall.isCaller}
+          incomingOffer={activeDirectCall.offer}
+          onEndCall={() => setActiveDirectCall(null)}
+        />
+      ) : activeMeeting ? (
         <MeetingView
           currentUser={currentUser}
           meetingTitle={activeMeeting.title}

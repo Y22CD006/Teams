@@ -239,7 +239,7 @@ export const ListPanel = ({
                   <Filter className="w-4 h-4" />
                 </button>
                 <button 
-                  onClick={onNewMeeting}
+                  onClick={() => onDialCall("Instant Meeting", true)}
                   className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] transition-all"
                   title="Video call"
                 >

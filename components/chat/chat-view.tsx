@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { 
   Phone, Video, Info, Smile, Send, Bold, Italic, Code, 
   MoreHorizontal, CornerUpRight, Trash2, Heart, ThumbsUp, Flame,
-  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus, Forward, Search, Paperclip, Image as ImageIcon
+  CheckCircle2, AlertCircle, RefreshCw, Type, MonitorUp, Users, PanelRightOpen, Plus, Forward, Search, Paperclip, Image as ImageIcon,
+  CornerUpLeft, Link, Pin, Mail, Languages
 } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +40,7 @@ export const ChatView = ({
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -155,6 +157,13 @@ export const ChatView = ({
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => onStartCall(true)}
+            className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+            title="Video call"
+          >
+            <Video className="w-4 h-4" />
+          </button>
           <button
             onClick={() => alert("Search within chat")}
             className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
@@ -306,11 +315,54 @@ export const ChatView = ({
                     <Forward className="w-4 h-4" />
                   </button>
                 )}
-                <button 
-                  onClick={() => alert("Message options")}
-                  className="p-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="More options">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
+                <div className="relative">
+                  <button 
+                    onClick={() => setOpenDropdownId(openDropdownId === msg.id ? null : msg.id)}
+                    className="p-1.5 hover:bg-[#F3F2F1] dark:hover:bg-[#484644] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="More options">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+
+                  {openDropdownId === msg.id && (
+                    <div className="absolute top-full right-0 mt-1 w-52 bg-[#292929] border border-[#3B3A39] rounded-lg shadow-xl py-1.5 z-50">
+                      <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => { onOpenThread(msg); setOpenDropdownId(null); }}>
+                        <CornerUpLeft className="w-4 h-4 text-gray-400" />
+                        Reply
+                      </button>
+                      {onForwardMessage && (
+                        <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => { onForwardMessage(msg); setOpenDropdownId(null); }}>
+                          <Forward className="w-4 h-4 text-gray-400" />
+                          Forward
+                        </button>
+                      )}
+                      <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => setOpenDropdownId(null)}>
+                        <Link className="w-4 h-4 text-gray-400" />
+                        Copy link
+                      </button>
+                      {isMe && onDeleteMessage && (
+                        <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => { onDeleteMessage(msg.id); setOpenDropdownId(null); }}>
+                          <Trash2 className="w-4 h-4 text-gray-400" />
+                          Delete
+                        </button>
+                      )}
+                      <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => setOpenDropdownId(null)}>
+                        <Pin className="w-4 h-4 text-gray-400" />
+                        Pin for everyone
+                      </button>
+                      <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center gap-3 transition-colors" onClick={() => setOpenDropdownId(null)}>
+                        <Mail className="w-4 h-4 text-gray-400" />
+                        Mark as unread
+                      </button>
+                      <div className="w-full h-px bg-[#3B3A39] my-1" />
+                      <button className="w-full px-3 py-1.5 text-left text-sm text-[var(--text-primary)] hover:bg-[#3B3A39] flex items-center justify-between transition-colors group" onClick={() => setOpenDropdownId(null)}>
+                        <div className="flex items-center gap-3">
+                          <Languages className="w-4 h-4 text-gray-400" />
+                          Translation
+                        </div>
+                        <CornerUpRight className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-100" />
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {isMe && onDeleteMessage && (
                   <button

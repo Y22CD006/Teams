@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
         ]);
 
         const redisChannels = [
+          `user:${session.userId}`,
           ...dmMemberships.map(d => `message:${d.dmId}`),
           ...teamMemberships.flatMap(m => m.team.channels.map(c => `message:${c.id}`))
         ];
