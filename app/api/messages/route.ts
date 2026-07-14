@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     include: {
       author: { select: { id: true, name: true, imageUrl: true, status: true, email: true } },
       reactions: { include: { user: { select: { id: true } } } },
+      storedFiles: true,
     },
     orderBy: { createdAt: "asc" },
     take: 50,
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
   const mapped = messages.map((msg) => ({
     ...msg,
     reactions: formatReactions(msg.reactions),
+    attachments: (msg as any).storedFiles || [],
   }));
 
   return NextResponse.json({ messages: mapped });
@@ -54,21 +56,23 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { content, channelId, dmId } = await req.json();
+  const { content, channelId, dmId, fileId } = await req.json();
 
-  if (!content) {
-    return NextResponse.json({ error: "Content is required" }, { status: 400 });
+  if (!content && !fileId) {
+    return NextResponse.json({ error: "Content or file is required" }, { status: 400 });
   }
 
   const msg = await prisma.message.create({
     data: {
-      content,
+      content: content || "",
       authorId: session.userId,
       channelId: channelId || null,
       dmId: dmId || null,
+      ...(fileId && { storedFiles: { connect: { id: fileId } } }),
     },
     include: {
       author: { select: { id: true, name: true, imageUrl: true } },
+      storedFiles: true,
     },
   });
 
@@ -85,6 +89,7 @@ export async function POST(req: NextRequest) {
     dmId: msg.dmId,
     reactions: [],
     replyCount: 0,
+    attachments: msg.storedFiles || [],
   };
 
   if (redis) {

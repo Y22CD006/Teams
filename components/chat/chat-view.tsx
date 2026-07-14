@@ -10,6 +10,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Chat, Team, Channel, Message, User } from '@/lib/types';
 import { useChat } from '@/hooks/use-chat';
 import { InviteChannelMemberModal } from '@/components/teams/invite-channel-member-modal';
+import { UploadButton } from '@/lib/uploadthing';
+import { Paperclip, FileText, Image as ImageIcon, Download } from 'lucide-react';
 
 interface ChatViewProps {
   currentUser: User;
@@ -41,6 +43,7 @@ export const ChatView = ({
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
+  const [pendingUploads, setPendingUploads] = useState<{name: string, url: string, id: string}[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -58,11 +61,14 @@ export const ChatView = ({
   );
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && pendingUploads.length === 0) return;
     
-    await sendMessage(inputText);
+    // We handle the first pending upload for simplicity. In a full app, we might handle multiple.
+    const fileId = pendingUploads.length > 0 ? pendingUploads[0].id : undefined;
+    await sendMessage(inputText, fileId);
     
     setInputText('');
+    setPendingUploads([]);
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -242,14 +248,14 @@ export const ChatView = ({
                     <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight">
                       {msg.senderName || "Unknown"}
                     </span>
-                    <span className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
+                    <span suppressHydrationWarning className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
                 )}
                 {showHeader && isMe && (
                   <div className="flex items-baseline gap-2 mb-1 flex-row-reverse">
-                    <span className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
+                    <span suppressHydrationWarning className="text-[11px] text-[var(--text-secondary)] font-medium hover:underline cursor-pointer">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
@@ -281,6 +287,41 @@ export const ChatView = ({
                         <Copy className="w-3.5 h-3.5" />
                         Copy Link
                       </button>
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {msg.attachments.map((att: any) => {
+                        const isImage = att.type?.startsWith('image/');
+                        return isImage ? (
+                          <div key={att.id} className="relative rounded-lg overflow-hidden border border-[var(--border-color)] max-w-sm">
+                            <img src={att.url} alt={att.name} className="w-full h-auto object-cover" />
+                          </div>
+                        ) : (
+                          <a
+                            key={att.id}
+                            href={att.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+                              isMe 
+                                ? 'bg-[#4B4FA3] border-[#4B4FA3] hover:bg-[#3D4088]' 
+                                : 'bg-[#F3F2F1] dark:bg-[#292929] border-[var(--border-color)] hover:bg-[#E1DFDD] dark:hover:bg-[#484644]'
+                            }`}
+                          >
+                            <div className={`p-1.5 rounded ${isMe ? 'bg-[#5B5FC7]' : 'bg-white dark:bg-[#3B3A39]'}`}>
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-sm font-semibold truncate">{att.name}</span>
+                              <span className="text-[11px] opacity-80 uppercase tracking-wider">{att.size} bytes</span>
+                            </div>
+                            <Download className="w-4 h-4 opacity-70" />
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -399,7 +440,51 @@ export const ChatView = ({
             <button onClick={() => addFormatting('code')} className="p-1.5 rounded hover:bg-[#E1DFDD] dark:hover:bg-[#484644] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" title="Code snippet">
               <Code className="w-4 h-4" />
             </button>
+            <div className="w-[1px] h-4 bg-[var(--border-color)] mx-1" />
+            <UploadButton
+              endpoint="channelAttachment"
+              onClientUploadComplete={(res) => {
+                if (res && res.length > 0) {
+                  setPendingUploads(prev => [...prev, {
+                    name: res[0].name,
+                    url: res[0].serverData.fileUrl,
+                    id: res[0].serverData.fileId,
+                  }]);
+                }
+              }}
+              onUploadError={(error: Error) => {
+                alert(`ERROR! ${error.message}`);
+              }}
+              appearance={{
+                button: "bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 h-auto w-auto min-w-0 border-none outline-none focus-within:ring-0 after:hidden",
+                container: "h-auto p-0 m-0 w-auto flex-row",
+                allowedContent: "hidden",
+              }}
+              content={{
+                button({ ready }) {
+                  return <Paperclip className="w-4 h-4 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all" />;
+                }
+              }}
+            />
           </div>
+
+          {/* Pending Uploads */}
+          {pendingUploads.length > 0 && (
+            <div className="px-3 pt-2 pb-0 flex flex-wrap gap-2">
+              {pendingUploads.map((file, i) => (
+                <div key={i} className="flex items-center gap-2 bg-[#F3F2F1] dark:bg-[#292929] px-2 py-1 rounded text-xs border border-[var(--border-color)]">
+                  <Paperclip className="w-3 h-3 text-[var(--text-secondary)]" />
+                  <span className="truncate max-w-[150px]">{file.name}</span>
+                  <button 
+                    onClick={() => setPendingUploads(prev => prev.filter((_, idx) => idx !== i))}
+                    className="text-[var(--text-secondary)] hover:text-rose-500 ml-1"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Input Area */}
           <div className="flex items-end px-3 py-2">
@@ -419,9 +504,9 @@ export const ChatView = ({
             />
             <button
               onClick={handleSend}
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() && pendingUploads.length === 0}
               className={`p-1.5 rounded-md flex-shrink-0 transition-all ${
-                !inputText.trim()
+                (!inputText.trim() && pendingUploads.length === 0)
                   ? 'text-[var(--text-secondary)] opacity-50 cursor-not-allowed'
                   : 'text-[#5B5FC7] dark:text-[#7977F7] hover:bg-[#F3F2F1] dark:hover:bg-[#484644]'
               }`}

@@ -23,6 +23,7 @@ export function useChat(channelId?: string, dmId?: string) {
         senderAvatar: msg.author.imageUrl ? msg.author.imageUrl.substring(0,2).toUpperCase() : msg.author.name.substring(0,2).toUpperCase(),
         reactions: msg.reactions || [],
         replyCount: msg.replyCount || 0,
+        attachments: msg.attachments || [],
       }));
     },
     enabled: !!channelId || !!dmId,
@@ -49,6 +50,7 @@ export function useChat(channelId?: string, dmId?: string) {
           senderName: msg.senderName,
           senderAvatar: msg.senderAvatar || msg.senderName.substring(0, 2).toUpperCase(),
           reactions: msg.reactions || [],
+          attachments: msg.attachments || [],
         };
 
         queryClient.setQueryData(queryKey, (old: Message[] = []) => {
@@ -65,11 +67,11 @@ export function useChat(channelId?: string, dmId?: string) {
     };
   }, [channelId, dmId, queryClient, queryKey]);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, fileId?: string) => {
     await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, channelId, dmId }),
+      body: JSON.stringify({ content, channelId, dmId, fileId }),
     });
   };
 

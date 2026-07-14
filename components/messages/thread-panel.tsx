@@ -100,7 +100,7 @@ export const ThreadPanel = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-1.5">
                     <span className="text-xs font-bold text-[var(--text-primary)] truncate">{reply.senderName}</span>
-                    <span className="text-[9px] text-gray-500 font-mono flex-shrink-0">
+                    <span suppressHydrationWarning className="text-[9px] text-gray-500 font-mono flex-shrink-0">
                       {new Date(reply.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>

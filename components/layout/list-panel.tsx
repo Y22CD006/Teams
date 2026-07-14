@@ -652,7 +652,7 @@ export const ListPanel = ({
                             <h4 className={`text-sm truncate text-[var(--text-primary)] leading-tight ${hasUnread ? 'font-bold' : 'font-semibold'}`}>
                               {chat.name}
                             </h4>
-                            <span className={`text-[11px] font-mono pl-2 flex-shrink-0 ${hasUnread ? 'font-bold text-[#5B5FC7] dark:text-[#7977F7]' : 'text-[var(--text-secondary)]'}`}>
+                            <span suppressHydrationWarning className={`text-[11px] font-mono pl-2 flex-shrink-0 ${hasUnread ? 'font-bold text-[#5B5FC7] dark:text-[#7977F7]' : 'text-[var(--text-secondary)]'}`}>
                               {lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
                             </span>
                           </div>

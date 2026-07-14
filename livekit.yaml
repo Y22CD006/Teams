@@ -17,5 +17,5 @@ keys:
   devkey: devsecret
 
 redis:
-  address: localhost:6379
+  address: redis:6379
   db: 0

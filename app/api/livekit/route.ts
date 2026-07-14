@@ -10,5 +10,13 @@ export async function POST(req: NextRequest) {
   const room = existingRoom || generateRoomName();
   const meeting = await createMeetingRoom(session.userId, room);
 
+  const host = req.headers.get("host") || "";
+  const hostname = host.split(":")[0];
+  if (meeting.url.includes("localhost") && hostname && hostname !== "localhost") {
+    meeting.url = meeting.url.replace("localhost", hostname);
+  }
+
+  console.log("LIVEKIT URL GENERATED:", meeting.url);
+
   return NextResponse.json(meeting);
 }

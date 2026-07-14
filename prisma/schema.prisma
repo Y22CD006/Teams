@@ -149,6 +149,7 @@ model Message {
   threadReplies ThreadReply[]
   readReceipts  ReadReceipt[]
   reactions     Reaction[]
+  storedFiles   StoredFile[]
 }
 
 model ThreadReply {
@@ -294,6 +295,8 @@ model StoredFile {
   name      String
   type      String
   size      String
+  url       String   @default("")
+  key       String   @default("")
   createdAt DateTime @default(now())
 
   uploadedById String
@@ -303,6 +306,8 @@ model StoredFile {
   team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
   channelId String?
   channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
 
   @@index([uploadedById])
 }
