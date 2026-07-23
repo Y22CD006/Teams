@@ -7,6 +7,303 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                 String          @id @default(cuid())
+  email              String          @unique
+  username           String          @unique
+  name               String?
+  imageUrl           String?
+  bio                String?
+  timezone           String          @default("UTC")
+  status             UserStatus      @default(AVAILABLE)
+  customStatus       String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  password           String          @default("")
+  role               String?
+  firstName          String?
+  lastName           String?
+  middleName         String?
+  phoneNumber        String?
+  activityEvents     ActivityEvent[]
+  channelMemberships ChannelMember[]
+  dmMemberships      DMMember[]
+  createdEvents      Event[]
+  eventAttendees     EventAttendee[]
+  receivedRequests   FriendRequest[] @relation("ReceivedRequests")
+  sentRequests       FriendRequest[] @relation("SentRequests")
+  messages           Message[]
+  notifications      Notification[]
+  reactions          Reaction[]
+  readReceipts       ReadReceipt[]
+  sessions           Session[]
+  storedFiles        StoredFile[]
+  assignedTasks      Task[]          @relation("TaskAssignee")
+  createdTasks       Task[]          @relation("TaskCreator")
+  teamMemberships    TeamMember[]
+  threadReplies      ThreadReply[]
+  recordings         Recording[]
+  meetingParticipations MeetingParticipant[]
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?
+  imageUrl    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  channels    Channel[]
+  storedFiles StoredFile[]
+  tasks       Task[]
+  members     TeamMember[]
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  role     MembershipRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+  userId   String
+  teamId   String
+  team     Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+model Channel {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  type        ChannelType     @default(PUBLIC)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  teamId      String
+  team        Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members     ChannelMember[]
+  messages    Message[]
+  storedFiles StoredFile[]
+
+  @@unique([teamId, name])
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  joinedAt  DateTime @default(now())
+  userId    String
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+}
+
+model Message {
+  id            String         @id @default(cuid())
+  content       String
+  isThread      Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  authorId      String
+  channelId     String?
+  dmId          String?
+  meetingId     String?
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  channel       Channel?       @relation(fields: [channelId], references: [id])
+  dm            DirectMessage? @relation(fields: [dmId], references: [id], onDelete: Cascade)
+  meeting       Meeting?       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  reactions     Reaction[]
+  readReceipts  ReadReceipt[]
+  threadReplies ThreadReply[]
+}
+
+model ThreadReply {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  authorId  String
+  messageId String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model DirectMessage {
+  id        String     @id @default(cuid())
+  name      String?
+  isGroup   Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  members   DMMember[]
+  messages  Message[]
+}
+
+model DMMember {
+  id       String        @id @default(cuid())
+  joinedAt DateTime      @default(now())
+  userId   String
+  dmId     String
+  dm       DirectMessage @relation(fields: [dmId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dmId])
+}
+
+model Event {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  isAllDay    Boolean         @default(false)
+  meetingLink String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  creatorId   String
+  creator     User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  attendees   EventAttendee[]
+  meetings    Meeting[]
+}
+
+model EventAttendee {
+  id          String    @id @default(cuid())
+  status      String    @default("PENDING")
+  respondedAt DateTime?
+  userId      String
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    String     @default("MEDIUM")
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  assigneeId  String?
+  createdById String
+  teamId      String
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy   User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  team        Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model ReadReceipt {
+  id        String   @id @default(cuid())
+  readAt    DateTime @default(now())
+  userId    String
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  createdAt DateTime @default(now())
+  userId    String
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId, emoji])
+}
+
+model FriendRequest {
+  id          String              @id @default(cuid())
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  senderId    String
+  recipientId String
+  recipient   User                @relation("ReceivedRequests", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, recipientId])
+  @@index([recipientId])
+  @@index([senderId])
+}
+
+model StoredFile {
+  id           String   @id @default(cuid())
+  name         String
+  type         String
+  size         String
+  createdAt    DateTime @default(now())
+  uploadedById String
+  teamId       String?
+  channelId    String?
+  channel      Channel? @relation(fields: [channelId], references: [id])
+  team         Team?    @relation(fields: [teamId], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([uploadedById])
+}
+
+model Recording {
+  id          String   @id @default(cuid())
+  egressId    String   @unique
+  meetingId   String
+  startedById String
+  status      String   
+  url         String?  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  startedBy   User     @relation(fields: [startedById], references: [id])
+  meeting     Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  detail    String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  userId    String
+  actorId   String?
+  teamId    String?
+  channelId String?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model ActivityEvent {
+  id        String            @id @default(cuid())
+  type      ActivityEventType
+  metadata  Json?
+  createdAt DateTime          @default(now())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
@@ -31,280 +328,10 @@ enum UserStatus {
   OFFLINE
 }
 
-model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  username     String     @unique
-  name         String?
-  firstName    String?
-  middleName   String?
-  lastName     String?
-  phoneNumber  String?
-  imageUrl     String?
-  bio          String?
-  password     String   @default("")
-  timezone     String     @default("UTC")
-  status       UserStatus @default(AVAILABLE)
-  customStatus String?
-  role         String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  sessions          Session[]
-
-  teamMemberships   TeamMember[]
-  channelMemberships ChannelMember[]
-  messages          Message[]
-  threadReplies     ThreadReply[]
-  dmMemberships     DMMember[]
-  eventAttendees    EventAttendee[]
-  assignedTasks     Task[]            @relation("TaskAssignee")
-  createdTasks      Task[]            @relation("TaskCreator")
-  createdEvents     Event[]
-  readReceipts      ReadReceipt[]
-  reactions         Reaction[]
-  sentRequests      FriendRequest[] @relation("SentRequests")
-  receivedRequests  FriendRequest[] @relation("ReceivedRequests")
-  activityEvents    ActivityEvent[]
-  storedFiles       StoredFile[]
-  notifications     Notification[]
-}
-
-model Team {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  imageUrl    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  members  TeamMember[]
-  channels Channel[]
-  tasks    Task[]
-  storedFiles StoredFile[]
-}
-
-model TeamMember {
-  id       String         @id @default(cuid())
-  role     MembershipRole @default(MEMBER)
-  joinedAt DateTime       @default(now())
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  teamId String
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, teamId])
-}
-
-model Channel {
-  id          String      @id @default(cuid())
-  name        String
-  description String?
-  type        ChannelType @default(PUBLIC)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  teamId String
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  members  ChannelMember[]
-  messages Message[]
-  storedFiles StoredFile[]
-
-  @@unique([teamId, name])
-}
-
-model ChannelMember {
-  id       String   @id @default(cuid())
-  joinedAt DateTime @default(now())
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  channelId String
-  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, channelId])
-}
-
-model Message {
-  id        String   @id @default(cuid())
-  content   String
-  isThread  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  authorId String
-  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  channelId String?
-  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
-
-  dmId String?
-  dm   DirectMessage? @relation(fields: [dmId], references: [id], onDelete: Cascade)
-
-  threadReplies ThreadReply[]
-  readReceipts  ReadReceipt[]
-  reactions     Reaction[]
-}
-
-model ThreadReply {
-  id        String   @id @default(cuid())
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  authorId String
-  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  messageId String
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-}
-
-model DirectMessage {
-  id        String   @id @default(cuid())
-  name      String?
-  isGroup   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  members  DMMember[]
-  messages Message[]
-}
-
-model DMMember {
-  id       String   @id @default(cuid())
-  joinedAt DateTime @default(now())
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  dmId String
-  dm   DirectMessage @relation(fields: [dmId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, dmId])
-}
-
-model Event {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  isAllDay    Boolean  @default(false)
-  meetingLink String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  creatorId String
-  creator   User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-
-  attendees EventAttendee[]
-}
-
-model EventAttendee {
-  id          String    @id @default(cuid())
-  status      String    @default("PENDING")
-  respondedAt DateTime?
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  eventId String
-  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-}
-
-model Task {
-  id          String     @id @default(cuid())
-  title       String
-  description String?
-  status      TaskStatus @default(TODO)
-  priority    String     @default("MEDIUM")
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  assigneeId  String?
-  assignee    User?  @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-
-  createdById String
-  createdBy   User   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-
-  teamId String
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-}
-
-model ReadReceipt {
-  id        String   @id @default(cuid())
-  readAt    DateTime @default(now())
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  messageId String
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, messageId])
-}
-
-model Reaction {
-  id        String   @id @default(cuid())
-  emoji     String
-  createdAt DateTime @default(now())
-
-  userId  String
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  messageId String
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, messageId, emoji])
-}
-
 enum FriendRequestStatus {
   PENDING
   ACCEPTED
   REJECTED
-}
-
-model FriendRequest {
-  id          String              @id @default(cuid())
-  status      FriendRequestStatus @default(PENDING)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  senderId   String
-  sender     User   @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
-
-  recipientId String
-  recipient   User   @relation("ReceivedRequests", fields: [recipientId], references: [id], onDelete: Cascade)
-
-  @@unique([senderId, recipientId])
-  @@index([recipientId])
-  @@index([senderId])
-}
-
-model StoredFile {
-  id        String   @id @default(cuid())
-  name      String
-  type      String
-  size      String
-  createdAt DateTime @default(now())
-
-  uploadedById String
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  teamId    String?
-  team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  channelId String?
-  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
-
-  @@index([uploadedById])
 }
 
 enum ActivityEventType {
@@ -325,45 +352,47 @@ enum NotificationType {
   FRIEND_REQUEST
 }
 
-model Notification {
-  id        String           @id @default(cuid())
-  type      NotificationType
-  title     String
-  detail    String?
-  read      Boolean          @default(false)
-  createdAt DateTime         @default(now())
+model Meeting {
+  id          String   @id // The LiveKit Room Name / ID
+  eventId     String?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  duration    Int?     // duration in seconds
+  status      MeetingStatus @default(ACTIVE)
 
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  actorId   String?
-  teamId    String?
-  channelId String?
-
-  @@index([userId, createdAt])
+  event       Event?   @relation(fields: [eventId], references: [id])
+  participants MeetingParticipant[]
+  messages    Message[]
+  recordings  Recording[]
+  analytics   MeetingAnalytics?
 }
 
-model ActivityEvent {
-  id        String             @id @default(cuid())
-  type      ActivityEventType
-  metadata  Json?
-  createdAt DateTime           @default(now())
-
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([createdAt])
+enum MeetingStatus {
+  ACTIVE
+  ENDED
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+model MeetingParticipant {
+  id          String   @id @default(cuid())
+  meetingId   String
+  userId      String
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+  duration    Int?     // duration in seconds
+  
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
+  @@index([meetingId])
   @@index([userId])
+}
+
+model MeetingAnalytics {
+  id            String   @id @default(cuid())
+  meetingId     String   @unique
+  totalAttendees Int      @default(0)
+  peakAttendees  Int      @default(0)
+  totalMessages  Int      @default(0)
+  
+  meeting       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
