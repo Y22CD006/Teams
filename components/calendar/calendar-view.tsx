@@ -206,6 +206,12 @@ export const CalendarView = ({
         {monthDays.map((cell) => {
           const isSel = selectedDateStr === cell.dateStr;
           const dayMeetings = meetingsForDate(meetings, cell.dateStr);
+          const dayTasks = tasksForDate(tasks, cell.dateStr);
+          const allItems = [
+            ...dayMeetings.map(m => ({ ...m, type: 'meeting' as const })),
+            ...dayTasks.map(t => ({ ...t, type: 'task' as const })),
+          ];
+          
           return (
             <div
               key={cell.day}
@@ -229,18 +235,26 @@ export const CalendarView = ({
               </span>
               
               <div className="flex-1 overflow-y-auto mt-1 space-y-1 scrollbar-none">
-                {dayMeetings.slice(0, 3).map((m) => (
+                {allItems.slice(0, 3).map((item) => (
                   <div
-                    key={m.id}
-                    className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 truncate font-semibold leading-none"
-                    title={m.title}
+                    key={item.id}
+                    className={`text-[9px] px-1.5 py-0.5 rounded border truncate font-semibold leading-none ${
+                      item.type === 'meeting'
+                        ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                        : item.priority === 'HIGH'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : item.priority === 'MEDIUM'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    }`}
+                    title={`${item.type === 'meeting' ? 'Meeting' : 'Task'}: ${item.title}`}
                   >
-                    {m.title}
+                    {item.title}
                   </div>
                 ))}
-                {dayMeetings.length > 3 && (
+                {allItems.length > 3 && (
                   <div className="text-[8px] text-gray-500 font-bold pl-1">
-                    +{dayMeetings.length - 3} more
+                    +{allItems.length - 3} more
                   </div>
                 )}
               </div>
@@ -299,6 +313,17 @@ export const CalendarView = ({
                     const slotHour = hour.split(":")[0];
                     return startHour === slotHour;
                   });
+                  const hourTasks = tasksForDate(tasks, ds).filter((t) => {
+                    if (!t.time) return false;
+                    const dueHour = t.time.split(":")[0];
+                    const slotHour = hour.split(":")[0];
+                    return dueHour === slotHour;
+                  });
+                  
+                  const allHourItems = [
+                    ...hourMeetings.map(m => ({ ...m, type: 'meeting' as const })),
+                    ...hourTasks.map(t => ({ ...t, type: 'task' as const })),
+                  ];
 
                   return (
                     <div
@@ -306,13 +331,21 @@ export const CalendarView = ({
                       onClick={() => handleDayClick(ds)}
                       className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors relative flex flex-col gap-0.5"
                     >
-                      {hourMeetings.map((m) => (
+                      {allHourItems.map((item) => (
                         <div
-                          key={m.id}
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 truncate font-semibold leading-none"
-                          title={`${m.title} (${m.startTime}-${m.endTime})`}
+                          key={item.id}
+                          className={`text-[9px] px-1.5 py-0.5 rounded border truncate font-semibold leading-none ${
+                            item.type === 'meeting'
+                              ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                              : item.priority === 'HIGH'
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : item.priority === 'MEDIUM'
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                          }`}
+                          title={`${item.type === 'meeting' ? 'Meeting' : 'Task'}: ${item.title}`}
                         >
-                          {m.title}
+                          {item.title}
                         </div>
                       ))}
                     </div>
@@ -336,6 +369,12 @@ export const CalendarView = ({
               const slotHour = hour.split(":")[0];
               return startHour === slotHour;
             });
+            const hourTasks = tasksForDate(tasks, selectedDateStr).filter((t) => {
+              if (!t.time) return false;
+              const dueHour = t.time.split(":")[0];
+              const slotHour = hour.split(":")[0];
+              return dueHour === slotHour;
+            });
 
             return (
               <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
@@ -348,8 +387,21 @@ export const CalendarView = ({
                       key={m.id}
                       className="text-xs px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 max-w-lg font-semibold flex items-center justify-between"
                     >
-                      <span>{m.title}</span>
+                      <span>Meeting: {m.title}</span>
                       <span className="text-[10px] text-indigo-400 font-mono font-medium">{m.startTime} - {m.endTime}</span>
+                    </div>
+                  ))}
+                  {hourTasks.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`text-xs px-3 py-1.5 rounded-xl max-w-lg font-semibold flex items-center justify-between border ${
+                        t.priority === 'HIGH' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                        t.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                        'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                      }`}
+                    >
+                      <span>Task: {t.title}</span>
+                      <span className="text-[10px] opacity-80 font-mono font-medium">Due at {t.time || "12:00"}</span>
                     </div>
                   ))}
                 </div>

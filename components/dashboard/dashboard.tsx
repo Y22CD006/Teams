@@ -484,11 +484,12 @@ export function Dashboard() {
 
   const handleAddTask = async (taskDetails: { title: string; description: string; priority: string; dueDate: string; dueTime?: string }) => {
     const firstTeam = teams[0];
-    if (!firstTeam) return;
 
     const dueDateTime = taskDetails.dueTime
       ? `${taskDetails.dueDate}T${taskDetails.dueTime}:00`
       : `${taskDetails.dueDate}T12:00:00`;
+
+    console.log("[dashboard handleAddTask] Submitting task:", taskDetails);
 
     const res = await fetch("/api/tasks", {
       method: "POST",
@@ -498,7 +499,7 @@ export function Dashboard() {
         description: taskDetails.description,
         priority: taskDetails.priority,
         dueDate: dueDateTime,
-        teamId: firstTeam.id,
+        teamId: firstTeam?.id || undefined,
       }),
     });
 
@@ -513,7 +514,10 @@ export function Dashboard() {
         priority: data.task.priority,
         assigneeName: null,
       };
+      console.log("[dashboard handleAddTask] Task saved successfully, dispatching to Redux store:", newTask);
       dispatch(addTask(newTask));
+    } else {
+      console.error("[dashboard handleAddTask] Failed to save task:", res.statusText);
     }
   };
 
