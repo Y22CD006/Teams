@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const channelId = (await params).id;
@@ -12,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!channel) return NextResponse.json({ error: "Channel not found" }, { status: 404 });
 
   const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: session.userId, teamId: channel.teamId } },
+    where: { userId_teamId: { userId: userId, teamId: channel.teamId } },
   });
   if (!membership) return NextResponse.json({ error: "Not a team member" }, { status: 403 });
 
@@ -34,17 +36,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const channelId = (await params).id;
-  const { userId } = await req.json();
+  const { userId: targetUserId } = await req.json();
 
   const channel = await prisma.channel.findUnique({ where: { id: channelId } });
   if (!channel) return NextResponse.json({ error: "Channel not found" }, { status: 404 });
 
   const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: session.userId, teamId: channel.teamId } },
+    where: { userId_teamId: { userId: userId, teamId: channel.teamId } },
   });
   if (!membership || membership.role === "MEMBER") {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });

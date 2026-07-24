@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+﻿import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 
 export async function POST() {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   return NextResponse.json({ message: "Upload endpoint ready for UploadThing integration" });
 }
+

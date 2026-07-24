@@ -6,7 +6,9 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { ListPanel } from "@/components/layout/list-panel";
 import { ChatView } from "@/components/chat/chat-view";
 import { ThreadPanel } from "@/components/messages/thread-panel";
-import { MeetingView } from "@/components/meetings/meeting-view";
+import { CallWindow } from "@/components/calls/CallWindow";
+import { IncomingCallModal } from "@/components/calls/IncomingCallModal";
+import { OutgoingCallModal } from "@/components/calls/OutgoingCallModal";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
 import { PeopleView } from "@/components/people/people-view";
@@ -63,6 +65,11 @@ export function Dashboard() {
     meetingsCount: number; filesCount: number; unreadCount: number;
   }>({ meetingsCount: 0, filesCount: 0, unreadCount: 0 });
   const [notifBadge, setNotifBadge] = useState(0);
+
+  // Call States
+  const [incomingCall, setIncomingCall] = useState<{ roomId: string; callerName: string; isVideo: boolean; callerId: string } | null>(null);
+  const [outgoingCall, setOutgoingCall] = useState<{ roomId: string; receiverName: string; isVideo: boolean; receiverId: string } | null>(null);
+  const [activeCall, setActiveCall] = useState<{ roomId: string; otherUserName: string; otherUserId: string; isVideo: boolean; isCaller: boolean } | null>(null);
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -127,6 +134,36 @@ export function Dashboard() {
     eventSource.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        
+        if (msg.type && (msg.type.includes("CALL") || msg.type.startsWith("WEBRTC_"))) {
+          if (msg.type === "INCOMING_CALL") {
+            setIncomingCall({
+              roomId: msg.roomId,
+              callerName: msg.callerName,
+              isVideo: msg.isVideo,
+              callerId: msg.callerId,
+            });
+          } else if (msg.type === "ACCEPT_CALL") {
+            setOutgoingCall(null);
+            setIncomingCall(null);
+            setActiveCall(prev => prev ? { ...prev, isCaller: true, otherUserId: msg.callerId } : {
+               roomId: msg.roomId,
+               otherUserName: msg.callerName || "Call User",
+               otherUserId: msg.callerId,
+               isVideo: msg.isVideo ?? false,
+               isCaller: true,
+            });
+          } else if (msg.type === "REJECT_CALL" || msg.type === "END_CALL") {
+            setIncomingCall(null);
+            setOutgoingCall(null);
+            setActiveCall(null);
+          } else if (msg.type.startsWith("WEBRTC_")) {
+            const customEvent = new CustomEvent("webrtc-signal", { detail: msg });
+            window.dispatchEvent(customEvent);
+          }
+          return;
+        }
+
         if (msg.id) {
           const isDm = msg.dmId != null;
           const id = msg.dmId || msg.channelId;
@@ -281,41 +318,113 @@ export function Dashboard() {
     }));
   };
 
-  const handleStartCall = (isVideo: boolean) => {
-    if (!currentUser) return;
-    const mockMeeting: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      title: activeView === "chat" ? `Sync Call with ${activeChat?.name}` : `Sync Call in #${activeChannel?.name}`,
-      organizer: currentUser.name,
-      date: new Date().toISOString().split("T")[0],
-      startTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-      endTime: "",
-      description: "Ad-hoc video call initiated inside conversation thread.",
-      attendees: [currentUser.name, ...allUsers.filter((u) => u.id !== currentUser.id).slice(0, 2).map((u) => u.name)],
-    };
-    dispatch(setActiveMeeting(mockMeeting));
+  const handleStartCall = async (isVideo: boolean) => {
+      if (!currentUser || !activeChatId) return; // Only allow calling in 1-1 chats
+      
+      const otherUser = activeChat?.participants.find(p => p.id !== currentUser.id);
+      if (!otherUser) return;
+  
+      const roomId = `call_${currentUser.id}_${otherUser.id}_${Date.now()}`;
+      
+      setOutgoingCall({
+        roomId,
+        receiverName: otherUser.name,
+        isVideo,
+        receiverId: otherUser.id,
+      });
+  
+      setActiveCall({
+        roomId,
+        otherUserName: otherUser.name,
+        otherUserId: otherUser.id,
+        isVideo,
+        isCaller: true,
+      });
+  
+      await fetch("/api/calls/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "INCOMING_CALL",
+          receiverId: otherUser.id,
+          roomId,
+          isVideo,
+          callerName: currentUser.name,
+        })
+      });
+  };
+
+  const handleAcceptCall = async () => {
+    if (!incomingCall || !currentUser) return;
+    
+    setActiveCall({
+      roomId: incomingCall.roomId,
+      otherUserName: incomingCall.callerName,
+      otherUserId: incomingCall.callerId,
+      isVideo: incomingCall.isVideo,
+      isCaller: false,
+    });
+    
+    const receiverId = incomingCall.callerId;
+    const roomId = incomingCall.roomId;
+    setIncomingCall(null);
+
+    await fetch("/api/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "ACCEPT_CALL",
+        receiverId,
+        roomId,
+        callerName: currentUser.name,
+        isVideo: incomingCall.isVideo,
+      })
+    });
+  };
+
+  const handleRejectCall = async () => {
+    if (!incomingCall || !currentUser) return;
+    
+    const receiverId = incomingCall.callerId;
+    const roomId = incomingCall.roomId;
+    setIncomingCall(null);
+
+    await fetch("/api/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "REJECT_CALL",
+        receiverId,
+        roomId,
+      })
+    });
   };
 
   const handleJoinMeeting = (meeting: CalendarMeeting) => {
     dispatch(setActiveMeeting(meeting));
   };
 
-  const handleLeaveCall = () => {
-    const sysMsg: Message = {
-      id: `msg-sys-${Date.now()}`,
-      senderId: "system",
-      senderName: "System Network",
-      senderAvatar: "SYS",
-      content: "Meeting call ended. Call duration: 4 minutes, 12 seconds.",
-      timestamp: new Date().toISOString(),
-      reactions: [],
-      isCallNotification: true,
-    };
+  const handleLeaveCall = async () => {
+    if (!currentUser) return;
+    
+    const roomId = activeCall?.roomId || outgoingCall?.roomId || incomingCall?.roomId;
+    const targetUserId = activeCall?.otherUserId || outgoingCall?.receiverId || incomingCall?.callerId;
 
-    if (activeView === "chat" && activeChatId) {
-      dispatch(addMessage({ chatId: activeChatId, message: sysMsg }));
+    setIncomingCall(null);
+    setOutgoingCall(null);
+    setActiveCall(null);
+
+    if (roomId && targetUserId) {
+      await fetch("/api/calls/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "END_CALL",
+          receiverId: targetUserId,
+          roomId,
+        })
+      }).catch(err => console.error("Error sending END_CALL signal:", err));
     }
-    dispatch(setActiveMeeting(null));
   };
 
   const handleSaveSettings = async (e: FormEvent) => {
@@ -330,19 +439,29 @@ export function Dashboard() {
     dispatch(setShowSettingsModal(false));
   };
 
-  const handleDialCall = (userName: string, isVideo: boolean) => {
+  const handleDialCall = async (user: any, isVideo: boolean) => {
     if (!currentUser) return;
-    const mockMeeting: CalendarMeeting = {
-      id: `meet-${Date.now()}`,
-      title: `Outgoing Call: ${userName}`,
-      organizer: currentUser.name,
-      date: new Date().toISOString().split("T")[0],
-      startTime: "",
-      endTime: "",
-      description: "Speed dial phone sync.",
-      attendees: [currentUser.name, userName],
-    };
-    dispatch(setActiveMeeting(mockMeeting));
+    
+    const roomId = `call_${currentUser.id}_${user.id}_${Date.now()}`;
+    
+    setOutgoingCall({
+      roomId,
+      receiverName: user.name,
+      isVideo,
+      receiverId: user.id,
+    });
+
+    await fetch("/api/calls/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "INCOMING_CALL",
+        receiverId: user.id,
+        roomId,
+        isVideo,
+        callerName: currentUser.name,
+      })
+    });
   };
 
   const handleAddMeeting = async (meetDetails: Omit<CalendarMeeting, "id">) => {
@@ -482,11 +601,14 @@ export function Dashboard() {
         badges={badges}
       />
 
-      {activeMeeting ? (
-        <MeetingView
-          currentUser={currentUser}
-          meetingTitle={activeMeeting.title}
-          onLeave={handleLeaveCall}
+      {activeCall ? (
+        <CallWindow
+          roomId={activeCall.roomId}
+          isCaller={activeCall.isCaller}
+          isVideo={activeCall.isVideo}
+          onEndCall={handleLeaveCall}
+          otherUserName={activeCall.otherUserName}
+          otherUserId={activeCall.otherUserId}
         />
       ) : (
         <>
@@ -753,7 +875,7 @@ export function Dashboard() {
                 />
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-[var(--border-color)]">
+              <div className="flex gap-2 pt-2 border-t border-[var(--border-color)] flex-wrap">
                 <button
                   type="button"
                   onClick={() => dispatch(setShowSettingsModal(false))}
@@ -773,6 +895,16 @@ export function Dashboard() {
                     </svg>
                   )}
                   {saving ? "Saving..." : "Save Preferences"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.cookie = "mock_userId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = "/login";
+                  }}
+                  className="w-full mt-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2 rounded-xl text-xs font-bold transition-all"
+                >
+                  Sign Out
                 </button>
               </div>
             </form>
@@ -819,17 +951,26 @@ export function Dashboard() {
                     </div>
                   </button>
                 ))}
-              {allUsers.filter((u) => u.id !== currentUser?.id).length === 0 && (
-                <p className="text-xs text-[var(--text-secondary)] text-center py-6">No other users found. Share this app with others!</p>
-              )}
-              {allUsers.filter((u) => u.id !== currentUser?.id).length > 0 &&
-                newChatSearch &&
-                allUsers.filter((u) => u.id !== currentUser?.id).filter((u) => u.name.toLowerCase().includes(newChatSearch.toLowerCase())).length === 0 && (
-                <p className="text-xs text-[var(--text-secondary)] text-center py-6">No users match "{newChatSearch}"</p>
-              )}
             </div>
           </div>
         </div>
+      )}
+
+      {incomingCall && !activeCall && (
+        <IncomingCallModal 
+          callerName={incomingCall.callerName}
+          isVideo={incomingCall.isVideo}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
+        />
+      )}
+
+      {outgoingCall && !activeCall && (
+        <OutgoingCallModal
+          receiverName={outgoingCall.receiverName}
+          isVideo={outgoingCall.isVideo}
+          onCancel={handleLeaveCall}
+        />
       )}
     </div>
   );

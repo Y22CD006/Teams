@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { cacheDel } from "@/lib/redis";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teamId = (await params).id;
 
   const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: session.userId, teamId } },
+    where: { userId_teamId: { userId: userId, teamId } },
   });
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
@@ -33,14 +35,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teamId = (await params).id;
-  const { userId, role } = await req.json();
+  const { userId: targetUserId, role } = await req.json();
 
   const current = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: session.userId, teamId } },
+    where: { userId_teamId: { userId: userId, teamId } },
   });
   if (!current || current.role === "MEMBER") {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
@@ -51,25 +55,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { user: { select: { id: true, name: true, username: true, email: true } } },
   });
 
-  await cacheDel(`user:${session.userId}:teams`);
+  await cacheDel(`user:${userId}:teams`);
   return NextResponse.json({ member }, { status: 201 });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const teamId = (await params).id;
-  const { userId } = await req.json();
+  const { userId: targetUserId } = await req.json();
 
   const current = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: session.userId, teamId } },
+    where: { userId_teamId: { userId: userId, teamId } },
   });
   if (!current || current.role === "MEMBER") {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  if (session.userId === userId) {
+  if (userId === userId) {
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
   }
 
@@ -77,6 +83,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     where: { userId_teamId: { userId, teamId } },
   });
 
-  await cacheDel(`user:${session.userId}:teams`);
+  await cacheDel(`user:${userId}:teams`);
   return NextResponse.json({ success: true });
 }

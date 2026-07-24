@@ -1,32 +1,44 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, createSession } from "@/lib/auth";
+import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
   try {
-    const { email, password, name } = await req.json();
+    const body = await req.json();
+    const { email, password, name, username } = body;
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: "Email, password, and name are required" }, { status: 400 });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 });
     }
 
-    const hashed = await hashPassword(password);
     const user = await prisma.user.create({
       data: {
         email,
-        username: email.split("@")[0],
-        name: name || email.split("@")[0],
-        password: hashed,
+        name,
+        username: username || email.split("@")[0],
+        // In a real app we'd hash the password
       },
     });
 
-    return NextResponse.json({ success: true, user: { id: user.id, email: user.email } });
+    const cookieStore = await cookies();
+    cookieStore.set("mock_userId", user.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return NextResponse.json({ success: true, user });
   } catch (error) {
+    console.error("Signup error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

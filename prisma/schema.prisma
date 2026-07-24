@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+  callsMade          Call[]          @relation("CallsMade")
+  callsReceived      Call[]          @relation("CallsReceived")
   id                 String          @id @default(cuid())
   email              String          @unique
   username           String          @unique
@@ -43,7 +45,6 @@ model User {
   teamMemberships    TeamMember[]
   threadReplies      ThreadReply[]
   recordings         Recording[]
-  meetingParticipations MeetingParticipant[]
 }
 
 model Team {
@@ -108,11 +109,9 @@ model Message {
   authorId      String
   channelId     String?
   dmId          String?
-  meetingId     String?
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   channel       Channel?       @relation(fields: [channelId], references: [id])
   dm            DirectMessage? @relation(fields: [dmId], references: [id], onDelete: Cascade)
-  meeting       Meeting?       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   reactions     Reaction[]
   readReceipts  ReadReceipt[]
   threadReplies ThreadReply[]
@@ -163,7 +162,6 @@ model Event {
   creatorId   String
   creator     User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   attendees   EventAttendee[]
-  meetings    Meeting[]
 }
 
 model EventAttendee {
@@ -259,7 +257,6 @@ model Recording {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   startedBy   User     @relation(fields: [startedById], references: [id])
-  meeting     Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
@@ -352,47 +349,37 @@ enum NotificationType {
   FRIEND_REQUEST
 }
 
-model Meeting {
-  id          String   @id // The LiveKit Room Name / ID
-  eventId     String?
-  startedAt   DateTime @default(now())
-  endedAt     DateTime?
-  duration    Int?     // duration in seconds
-  status      MeetingStatus @default(ACTIVE)
 
-  event       Event?   @relation(fields: [eventId], references: [id])
-  participants MeetingParticipant[]
-  messages    Message[]
-  recordings  Recording[]
-  analytics   MeetingAnalytics?
+
+
+
+
+
+
+
+model Call {
+  id         String     @id @default(cuid())
+  roomId     String     @unique
+  callerId   String
+  receiverId String
+  callType   String     // VOICE or VIDEO
+  status     String     // ONGOING, COMPLETED, MISSED, REJECTED
+  duration   Int?       // in seconds
+  startTime  DateTime   @default(now())
+  endTime    DateTime?
+  createdAt  DateTime   @default(now())
+
+  caller     User       @relation("CallsMade", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver   User       @relation("CallsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([callerId])
+  @@index([receiverId])
 }
 
-enum MeetingStatus {
-  ACTIVE
-  ENDED
-}
 
-model MeetingParticipant {
-  id          String   @id @default(cuid())
-  meetingId   String
-  userId      String
-  joinedAt    DateTime @default(now())
-  leftAt      DateTime?
-  duration    Int?     // duration in seconds
-  
-  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([meetingId])
-  @@index([userId])
-}
-
-model MeetingAnalytics {
-  id            String   @id @default(cuid())
-  meetingId     String   @unique
-  totalAttendees Int      @default(0)
-  peakAttendees  Int      @default(0)
-  totalMessages  Int      @default(0)
-  
-  meeting       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+model PubSubEvent {
+  id        Int      @id @default(autoincrement())
+  channel   String
+  message   String
+  createdAt DateTime @default(now())
 }

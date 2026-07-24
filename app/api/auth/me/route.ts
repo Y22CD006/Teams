@@ -1,68 +1,64 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
-import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ user: null }, { status: 401 });
+  try {
+    const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      // Mock user creation
+      user = await prisma.user.create({
+        data: {
+          id: userId,
+          email: `${userId}@example.com`,
+          username: `user_${userId}`,
+          name: "Mock User",
+          imageUrl: "",
+          status: "AVAILABLE",
+        }
+      });
+    }
+
+    return NextResponse.json({ user }, { status: 200 });
+  } catch (error) {
+    console.error("GET /api/auth/me error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, email: true, name: true, phoneNumber: true, username: true, imageUrl: true, status: true, customStatus: true, role: true },
-  });
-
-  if (!user) {
-    return NextResponse.json({ user: null }, { status: 401 });
-  }
-
-  return NextResponse.json({ user });
 }
 
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const body = await req.json();
-  const { name, status, customStatus, role } = body;
+    const body = await req.json();
+    const { status, role, customStatus } = body;
 
-  const STATUS_MAP: Record<string, string> = {
-    online: "AVAILABLE",
-    busy: "BUSY",
-    away: "AWAY",
-    offline: "OFFLINE",
-  };
-
-  const data: Record<string, unknown> = {};
-  if (name !== undefined) data.name = name;
-  if (status !== undefined) data.status = STATUS_MAP[status] || status;
-  if (customStatus !== undefined) data.customStatus = customStatus;
-  if (role !== undefined) data.role = role;
-
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "No fields to update" }, { status: 400 });
-  }
-
-  const user = await prisma.user.update({
-    where: { id: session.userId },
-    data,
-    select: { id: true, email: true, name: true, username: true, imageUrl: true, status: true, customStatus: true, role: true },
-  });
-
-  if (status !== undefined || customStatus !== undefined) {
-    await prisma.activityEvent.create({
+    const updated = await prisma.user.update({
+      where: { id: userId },
       data: {
-        type: "STATUS_CHANGED",
-        metadata: { status: user.status, customStatus: user.customStatus },
-        userId: session.userId,
+        ...(status && { status: status.toUpperCase() }),
+        ...(role !== undefined && { role }),
+        ...(customStatus !== undefined && { customStatus }),
       },
     });
-  }
 
-  await cacheDel(`user:${session.userId}:authme`);
-  return NextResponse.json({ user });
+    return NextResponse.json({ user: updated }, { status: 200 });
+  } catch (error) {
+    console.error("PATCH /api/auth/me error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
+

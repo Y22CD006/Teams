@@ -23,7 +23,7 @@ interface ListPanelProps {
   onJoinMeeting: (meeting: CalendarMeeting) => void;
   onNewChat: () => void;
   onNewMeeting: () => void;
-  onDialCall: (userName: string, isVideo: boolean) => void;
+  onDialCall: (user: any, isVideo: boolean) => void;
   onSelectMeeting: (meetingId: string) => void;
 }
 
@@ -635,7 +635,12 @@ export const ListPanel = ({
                 <button
                   disabled={!callInput}
                   onClick={() => {
-                    onDialCall(callInput, true);
+                    const selectedUser = allUsers.find(u => u.name.toLowerCase() === callInput.toLowerCase());
+                    if (selectedUser) {
+                      onDialCall(selectedUser, true);
+                    } else {
+                      alert("User not found!");
+                    }
                     setCallInput('');
                   }}
                   className="bg-[#6366F1] hover:bg-[#5053e1] disabled:opacity-50 text-white p-2 rounded-lg transition-all"
@@ -670,14 +675,14 @@ export const ListPanel = ({
 
                   <div className="flex gap-1 flex-shrink-0">
                     <button
-                      onClick={() => onDialCall(user.name, false)}
+                      onClick={() => onDialCall(user, false)}
                       className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded hover:bg-[#111827] transition-all"
                       title="Audio Call"
                     >
                       <PhoneCall className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => onDialCall(user.name, true)}
+                      onClick={() => onDialCall(user, true)}
                       className="text-[var(--text-secondary)] hover:text-[#6366F1] p-1 rounded hover:bg-[#111827] transition-all"
                       title="Video Call"
                     >

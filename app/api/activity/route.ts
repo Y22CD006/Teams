@@ -1,15 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.userId;
+  
 
   const cacheKey = `user:${userId}:activity`; const cached = await cacheGet<any>(cacheKey); if (cached) return NextResponse.json(cached);
 
@@ -79,7 +81,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -90,10 +94,11 @@ export async function POST(req: NextRequest) {
     data: {
       type,
       metadata: metadata || {},
-      userId: session.userId,
+      userId: userId,
     },
   });
 
-  await cacheDel(`user:${session.userId}:activity`);
+  await cacheDel(`user:${userId}:activity`);
   return NextResponse.json({ event }, { status: 201 });
 }
+
