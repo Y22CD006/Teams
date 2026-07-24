@@ -205,6 +205,7 @@ export const CalendarView = ({
 
         {monthDays.map((cell) => {
           const isSel = selectedDateStr === cell.dateStr;
+          const dayMeetings = meetingsForDate(meetings, cell.dateStr);
           return (
             <div
               key={cell.day}
@@ -226,6 +227,23 @@ export const CalendarView = ({
               }`}>
                 {cell.day}
               </span>
+              
+              <div className="flex-1 overflow-y-auto mt-1 space-y-1 scrollbar-none">
+                {dayMeetings.slice(0, 3).map((m) => (
+                  <div
+                    key={m.id}
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 truncate font-semibold leading-none"
+                    title={m.title}
+                  >
+                    {m.title}
+                  </div>
+                ))}
+                {dayMeetings.length > 3 && (
+                  <div className="text-[8px] text-gray-500 font-bold pl-1">
+                    +{dayMeetings.length - 3} more
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -276,12 +294,28 @@ export const CalendarView = ({
                 </div>
                 {weekDays.map((_, dayIdx) => {
                   const ds = weekDateStrs[dayIdx];
+                  const hourMeetings = meetingsForDate(meetings, ds).filter((m) => {
+                    const startHour = m.startTime.split(":")[0];
+                    const slotHour = hour.split(":")[0];
+                    return startHour === slotHour;
+                  });
+
                   return (
                     <div
                       key={`${hour}-${dayIdx}`}
                       onClick={() => handleDayClick(ds)}
-                      className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors"
-                    />
+                      className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors relative flex flex-col gap-0.5"
+                    >
+                      {hourMeetings.map((m) => (
+                        <div
+                          key={m.id}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 truncate font-semibold leading-none"
+                          title={`${m.title} (${m.startTime}-${m.endTime})`}
+                        >
+                          {m.title}
+                        </div>
+                      ))}
+                    </div>
                   );
                 })}
               </div>
@@ -296,14 +330,32 @@ export const CalendarView = ({
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="divide-y divide-[var(--border-color)]">
-          {dayHours.map((hour) => (
-            <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
-              <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
-                {hour}
+          {dayHours.map((hour) => {
+            const hourMeetings = meetingsForDate(meetings, selectedDateStr).filter((m) => {
+              const startHour = m.startTime.split(":")[0];
+              const slotHour = hour.split(":")[0];
+              return startHour === slotHour;
+            });
+
+            return (
+              <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
+                <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
+                  {hour}
+                </div>
+                <div className="flex-1 p-2 flex flex-col gap-1">
+                  {hourMeetings.map((m) => (
+                    <div
+                      key={m.id}
+                      className="text-xs px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 max-w-lg font-semibold flex items-center justify-between"
+                    >
+                      <span>{m.title}</span>
+                      <span className="text-[10px] text-indigo-400 font-mono font-medium">{m.startTime} - {m.endTime}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex-1 p-1" />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

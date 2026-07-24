@@ -468,7 +468,7 @@ export function Dashboard() {
         description: meetDetails.description,
         startTime: startDateTime,
         endTime: endDateTime,
-        attendees: [],
+        attendees: meetDetails.attendees,
       }),
     });
 
