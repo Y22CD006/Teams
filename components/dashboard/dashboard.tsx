@@ -333,14 +333,6 @@ export function Dashboard() {
         receiverId: otherUser.id,
       });
   
-      setActiveCall({
-        roomId,
-        otherUserName: otherUser.name,
-        otherUserId: otherUser.id,
-        isVideo,
-        isCaller: true,
-      });
-  
       await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

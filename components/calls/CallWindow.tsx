@@ -25,6 +25,7 @@ export function CallWindow({
   
   const [micActive, setMicActive] = useState(true);
   const [cameraActive, setCameraActive] = useState(isVideo);
+  const [isCallVideo, setIsCallVideo] = useState(isVideo);
   const [status, setStatus] = useState<string>("Connecting...");
   const [callTime, setCallTime] = useState<number>(0);
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export function CallWindow({
   // Helper to send signal to the target user via API
   const sendSignal = async (type: string, payload: any) => {
     try {
+      console.log(`[WebRTC Signal] Sending ${type} to user ${otherUserId}`);
       await fetch("/api/calls/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,13 +51,13 @@ export function CallWindow({
           type,
           receiverId: otherUserId,
           roomId,
-          isVideo,
+          isVideo: isCallVideo,
           callerName: currentUser?.name,
           payload,
         }),
       });
     } catch (err) {
-      console.error("Failed to send WebRTC signal:", err);
+      console.error("[WebRTC Signal] Failed to send signal:", err);
     }
   };
 
@@ -83,11 +85,29 @@ export function CallWindow({
         // 1. Request microphone and optional camera stream
         const constraints = {
           audio: true,
-          video: isVideo ? { width: 1280, height: 720 } : false,
+          video: isCallVideo ? { width: 1280, height: 720 } : false,
         };
         
-        console.log("Requesting local media with constraints:", constraints);
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log("[WebRTC] Requesting local media with constraints:", constraints);
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (mediaErr: any) {
+          console.warn("[WebRTC] Failed to get requested constraints. Trying audio-only fallback...", mediaErr);
+          if (isCallVideo) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+              setPermissionError("Camera access was blocked or unavailable. Voice call active.");
+              setIsCallVideo(false);
+              setCameraActive(false);
+            } catch (audioErr: any) {
+              console.error("[WebRTC] Audio fallback also failed:", audioErr);
+              throw audioErr;
+            }
+          } else {
+            throw mediaErr;
+          }
+        }
         
         if (isUnmounted) {
           stream.getTracks().forEach((track) => track.stop());
@@ -100,7 +120,7 @@ export function CallWindow({
           localVideoRef.current.srcObject = stream;
         }
 
-        // 2. Instantiate RTCPeerConnection
+        // 2. Instantiate RTCPeerConnection with STUN servers
         const pc = new RTCPeerConnection({
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
@@ -111,14 +131,15 @@ export function CallWindow({
         peerConnection.current = pc;
 
         // 3. Add local media tracks to the connection
-        console.log("Adding local tracks to PeerConnection");
+        console.log("[WebRTC] Adding local tracks to PeerConnection");
         stream.getTracks().forEach((track) => {
+          console.log(`[WebRTC] Adding track: kind=${track.kind}, label=${track.label}`);
           pc.addTrack(track, stream);
         });
 
         // 4. Handle remote tracks
         pc.ontrack = (event) => {
-          console.log("Received remote track:", event.track.kind);
+          console.log(`[WebRTC] Received remote track: kind=${event.track.kind}`);
           
           if (event.streams && event.streams[0]) {
             const remoteStream = event.streams[0];
@@ -128,12 +149,12 @@ export function CallWindow({
               remoteAudioRef.current.srcObject = remoteStream;
               remoteAudioRef.current.volume = 1.0;
               remoteAudioRef.current.play().catch((err) => {
-                console.error("Autoplay remote audio blocked/failed:", err);
+                console.error("[WebRTC] Autoplay remote audio blocked/failed:", err);
               });
             }
 
             // Bind video stream if video call
-            if (isVideo && remoteVideoRef.current) {
+            if (remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remoteStream;
             }
 
@@ -144,7 +165,7 @@ export function CallWindow({
         // 5. Send local ICE candidates to peer
         pc.onicecandidate = (event) => {
           if (event.candidate && !isUnmounted) {
-            console.log("Sending local ICE candidate to peer");
+            console.log("[WebRTC] Sending local ICE candidate to peer");
             sendSignal("WEBRTC_ICE_CANDIDATE", { candidate: event.candidate });
           }
         };
@@ -152,12 +173,12 @@ export function CallWindow({
         // 6. Monitor PeerConnection connection states
         pc.onconnectionstatechange = () => {
           if (isUnmounted) return;
-          console.log("RTCPeerConnection connectionState changed:", pc.connectionState);
+          console.log("[WebRTC] connectionState changed:", pc.connectionState);
           
           if (pc.connectionState === "connected") {
             setStatus("Connected");
           } else if (pc.connectionState === "failed") {
-            console.warn("Peer connection failed. Clean up.");
+            console.warn("[WebRTC] Peer connection failed. Cleaning up call.");
             handleEndCall(false);
           } else if (pc.connectionState === "closed") {
             handleEndCall(false);
@@ -166,11 +187,9 @@ export function CallWindow({
 
         pc.oniceconnectionstatechange = () => {
           if (isUnmounted) return;
-          console.log("RTCPeerConnection iceConnectionState changed:", pc.iceConnectionState);
+          console.log("[WebRTC] iceConnectionState changed:", pc.iceConnectionState);
           if (pc.iceConnectionState === "failed") {
-            console.warn("ICE Connection failed.");
-            // We do not immediately disconnect here to allow retries, 
-            // the main connectionState 'failed' will capture final drops.
+            console.warn("[WebRTC] ICE Connection failed.");
           } else if (pc.iceConnectionState === "closed") {
             handleEndCall(false);
           }
@@ -178,11 +197,11 @@ export function CallWindow({
 
         // 7. Initiate Caller vs Callee negotiation flow
         if (isCaller) {
-          console.log("Caller initiating WebRTC offer");
+          console.log("[WebRTC] Caller initiating WebRTC offer");
           setStatus("Calling...");
           const offer = await pc.createOffer({
             offerToReceiveAudio: true,
-            offerToReceiveVideo: isVideo,
+            offerToReceiveVideo: isCallVideo,
           });
           
           isSettingDescription.current = true;
@@ -194,12 +213,12 @@ export function CallWindow({
           setStatus("Connecting...");
           // If we had a pending offer while media was loading, process it now
           if (pendingOffer.current) {
-            console.log("Processing queued remote offer now that local media is ready");
+            console.log("[WebRTC] Processing queued remote offer now that local media is ready");
             await handleOffer(pendingOffer.current);
           }
         }
       } catch (err: any) {
-        console.error("Error accessing microphone/camera or starting WebRTC:", err);
+        console.error("[WebRTC] Error accessing microphone/camera or starting WebRTC:", err);
         setPermissionError(
           err.message || "Microphone permission was denied or could not be accessed."
         );
@@ -213,25 +232,28 @@ export function CallWindow({
       if (!pc) return;
 
       try {
-        console.log("Setting remote description (SDP Offer)");
+        console.log("[WebRTC] Setting remote description (SDP Offer)");
         isSettingDescription.current = true;
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         isSettingDescription.current = false;
+        console.log("[WebRTC] Successfully set remote description (SDP Offer)");
 
-        console.log("Creating SDP Answer");
+        console.log("[WebRTC] Creating SDP Answer");
         const answer = await pc.createAnswer();
         
+        console.log("[WebRTC] Setting local description (SDP Answer)");
         isSettingDescription.current = true;
         await pc.setLocalDescription(answer);
         isSettingDescription.current = false;
+        console.log("[WebRTC] Successfully set local description (SDP Answer)");
 
-        console.log("Sending local SDP Answer");
+        console.log("[WebRTC] Sending local SDP Answer");
         await sendSignal("WEBRTC_ANSWER", { answer });
 
         // Process any ICE candidates received prior to setting remote description
         await processQueuedCandidates();
       } catch (err) {
-        console.error("Error setting offer or generating answer:", err);
+        console.error("[WebRTC] Error setting offer or generating answer:", err);
         isSettingDescription.current = false;
       }
     };
@@ -241,14 +263,14 @@ export function CallWindow({
       const pc = peerConnection.current;
       if (!pc || !pc.remoteDescription) return;
 
-      console.log(`Processing ${iceQueue.current.length} queued ICE candidates`);
+      console.log(`[WebRTC] Processing ${iceQueue.current.length} queued ICE candidates`);
       while (iceQueue.current.length > 0) {
         const candidateInit = iceQueue.current.shift();
         if (candidateInit) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(candidateInit));
           } catch (err) {
-            console.error("Failed to add queued ICE candidate:", err);
+            console.error("[WebRTC] Failed to add queued ICE candidate:", err);
           }
         }
       }
@@ -264,39 +286,47 @@ export function CallWindow({
       
       try {
         if (data.type === "WEBRTC_ANSWER" && isCaller && pc) {
-          console.log("Received remote SDP Answer from callee");
+          console.log("[WebRTC] Received remote SDP Answer from callee");
           isSettingDescription.current = true;
           await pc.setRemoteDescription(new RTCSessionDescription(data.payload.answer));
           isSettingDescription.current = false;
+          console.log("[WebRTC] Successfully set remote description (SDP Answer) on caller");
           
           await processQueuedCandidates();
           setStatus("Connected");
         } else if (data.type === "WEBRTC_OFFER" && !isCaller) {
-          console.log("Received remote SDP Offer from caller");
+          console.log("[WebRTC] Received remote SDP Offer from caller");
+          
+          // Capture if this offer is a video upgrade trigger
+          if (data.isVideo !== undefined) {
+            console.log("[WebRTC] Video status in offer:", data.isVideo);
+            setIsCallVideo(data.isVideo);
+          }
+          
           if (pc) {
             await handleOffer(data.payload.offer);
           } else {
             // Media isn't ready yet, queue the offer
-            console.log("Media not ready. Queuing remote offer.");
+            console.log("[WebRTC] Media not ready. Queuing remote offer.");
             pendingOffer.current = data.payload.offer;
           }
         } else if (data.type === "WEBRTC_ICE_CANDIDATE") {
-          console.log("Received remote ICE candidate");
+          console.log("[WebRTC] Received remote ICE candidate");
           const candInit = data.payload.candidate;
           
           if (pc && pc.remoteDescription && !isSettingDescription.current) {
             await pc.addIceCandidate(new RTCIceCandidate(candInit));
           } else {
             // Queue candidates if remote description is not set yet
-            console.log("Remote description not set yet. Queuing ICE candidate.");
+            console.log("[WebRTC] Remote description not set yet. Queuing ICE candidate.");
             iceQueue.current.push(candInit);
           }
         } else if (data.type === "END_CALL" || data.type === "REJECT_CALL") {
-          console.log("Call ended by remote peer");
+          console.log("[WebRTC] Call ended by remote peer");
           handleEndCall(false);
         }
       } catch (err) {
-        console.error("Error handling signaling event:", err);
+        console.error("[WebRTC] Error handling signaling event:", err);
         isSettingDescription.current = false;
       }
     };
@@ -318,9 +348,9 @@ export function CallWindow({
         peerConnection.current.close();
       }
       
-      console.log("CallWindow cleanup complete");
+      console.log("[WebRTC] CallWindow cleanup complete");
     };
-  }, [isCaller, otherUserId, roomId, isVideo]);
+  }, [isCaller, otherUserId, roomId]);
 
   const handleEndCall = (sendEndSignal = true) => {
     // Release media
@@ -346,14 +376,57 @@ export function CallWindow({
       const active = !micActive;
       localStream.current.getAudioTracks().forEach((t) => (t.enabled = active));
       setMicActive(active);
+      console.log(`[WebRTC] Local microphone ${active ? "enabled" : "disabled"}`);
     }
   };
 
-  const toggleCamera = () => {
-    if (localStream.current && isVideo) {
-      const active = !cameraActive;
-      localStream.current.getVideoTracks().forEach((t) => (t.enabled = active));
-      setCameraActive(active);
+  const toggleCamera = async () => {
+    const pc = peerConnection.current;
+    if (!pc) return;
+
+    if (!isCallVideo) {
+      // Upgrade from audio to video call dynamically!
+      try {
+        console.log("[WebRTC] Upgrading call to video, acquiring camera stream...");
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+        const videoTrack = stream.getVideoTracks()[0];
+        
+        if (localStream.current) {
+          localStream.current.addTrack(videoTrack);
+        } else {
+          localStream.current = new MediaStream([videoTrack]);
+        }
+        
+        pc.addTrack(videoTrack, localStream.current);
+        
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream.current;
+        }
+        
+        setIsCallVideo(true);
+        setCameraActive(true);
+        
+        // Renegotiate by generating a new SDP offer
+        console.log("[WebRTC] Creating renegotiation SDP offer...");
+        const offer = await pc.createOffer();
+        isSettingDescription.current = true;
+        await pc.setLocalDescription(offer);
+        isSettingDescription.current = false;
+        
+        await sendSignal("WEBRTC_OFFER", { offer });
+        console.log("[WebRTC] Sent renegotiation offer to remote peer");
+      } catch (err) {
+        console.error("[WebRTC] Failed to dynamically enable camera/video upgrade:", err);
+        setPermissionError("Camera access failed. Unable to enable video.");
+      }
+    } else {
+      // Toggle the enabled flag on existing track
+      if (localStream.current) {
+        const active = !cameraActive;
+        localStream.current.getVideoTracks().forEach((t) => (t.enabled = active));
+        setCameraActive(active);
+        console.log(`[WebRTC] Local camera ${active ? "enabled" : "disabled"}`);
+      }
     }
   };
 
@@ -382,35 +455,34 @@ export function CallWindow({
         )}
       </div>
 
-      {/* Center Display: Video Stream grid or Audio-only profile */}
-      <div className="flex-1 w-full flex items-center justify-center py-6 relative">
-        {permissionError ? (
-          <div className="max-w-md text-center p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
-            <p className="text-red-400 font-semibold mb-2">Microphone Error</p>
+      {/* Center Display: PiP Video Stream grid or Audio-only profile */}
+      <div className="flex-1 w-full flex items-center justify-center py-4 relative min-h-0">
+        {permissionError && !isCallVideo ? (
+          <div className="max-w-md text-center p-6 bg-red-500/10 border border-red-500/20 rounded-2xl z-10">
+            <p className="text-red-400 font-semibold mb-2">Device Alert</p>
             <p className="text-gray-400 text-sm">{permissionError}</p>
           </div>
-        ) : isVideo ? (
-          <div className="w-full h-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 relative">
-            {/* Remote Video Container */}
-            <div className="bg-gray-900/60 border border-white/5 rounded-2xl overflow-hidden relative flex items-center justify-center">
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-              {status !== "Connected" && (
-                <div className="absolute inset-0 bg-[#0F0F10] flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3">
-                    {otherUserName.charAt(0)}
-                  </div>
-                  <p className="text-gray-400 text-sm">Waiting for {otherUserName}...</p>
+        ) : isCallVideo ? (
+          <div className="relative w-full h-full max-w-4xl bg-black/60 rounded-2xl overflow-hidden border border-white/5 shadow-2xl flex items-center justify-center">
+            
+            {/* Remote Video (Full Screen inside container) */}
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+            {status !== "Connected" && (
+              <div className="absolute inset-0 bg-[#0F0F10] flex flex-col items-center justify-center z-10">
+                <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 animate-pulse">
+                  {otherUserName.charAt(0)}
                 </div>
-              )}
-            </div>
+                <p className="text-gray-400 text-sm">Connecting video stream...</p>
+              </div>
+            )}
 
-            {/* Local Video Container */}
-            <div className="bg-gray-900/60 border border-white/5 rounded-2xl overflow-hidden relative flex items-center justify-center">
+            {/* Local Video (PiP Corner Overlay) */}
+            <div className="absolute bottom-4 right-4 w-32 h-24 sm:w-40 sm:h-28 bg-[#18181B] rounded-xl overflow-hidden border border-white/20 shadow-2xl z-20 flex items-center justify-center">
               <video
                 ref={localVideoRef}
                 autoPlay
@@ -419,14 +491,21 @@ export function CallWindow({
                 className="w-full h-full object-cover"
               />
               {!cameraActive && (
-                <div className="absolute inset-0 bg-[#0F0F10] flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3">
+                <div className="absolute inset-0 bg-[#18181B] flex flex-col items-center justify-center">
+                  <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white text-xs font-bold mb-1">
                     {currentUser?.name?.charAt(0) || "U"}
                   </div>
-                  <p className="text-gray-400 text-sm">Camera Off</p>
+                  <p className="text-gray-400 text-[10px]">Camera Off</p>
                 </div>
               )}
             </div>
+
+            {/* Small error banner if camera failed but call continues in audio fallback */}
+            {permissionError && (
+              <div className="absolute top-4 left-4 right-4 bg-amber-500/90 text-black px-4 py-2 rounded-xl text-xs font-semibold shadow-lg z-30 text-center animate-fade-in">
+                {permissionError}
+              </div>
+            )}
           </div>
         ) : (
           /* Audio-only UI with vibrant pulser */
@@ -453,6 +532,7 @@ export function CallWindow({
 
       {/* Control Buttons Bar */}
       <div className="flex items-center gap-4 bg-white/5 px-6 py-3.5 rounded-2xl border border-white/10 z-10">
+        
         {/* Toggle Mic Button */}
         <button
           onClick={toggleMic}
@@ -466,20 +546,18 @@ export function CallWindow({
           {micActive ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
         </button>
 
-        {/* Toggle Video Button (Only if video call is supported/requested) */}
-        {isVideo && (
-          <button
-            onClick={toggleCamera}
-            className={`p-3 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
-              cameraActive
-                ? "bg-white/10 hover:bg-white/20 text-white"
-                : "bg-red-500 hover:bg-red-600 text-white"
-            }`}
-            title={cameraActive ? "Stop Camera" : "Start Camera"}
-          >
-            {cameraActive ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-          </button>
-        )}
+        {/* Toggle Video Button */}
+        <button
+          onClick={toggleCamera}
+          className={`p-3 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
+            cameraActive
+              ? "bg-white/10 hover:bg-white/20 text-white"
+              : "bg-red-500 hover:bg-red-600 text-white"
+          }`}
+          title={cameraActive ? "Stop Camera" : "Start Camera"}
+        >
+          {cameraActive ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+        </button>
 
         {/* Separator */}
         <div className="w-px h-6 bg-white/20 mx-1" />
