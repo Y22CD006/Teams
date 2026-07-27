@@ -7,6 +7,6 @@ export async function generateLiveKitToken(identity: string, room: string): Prom
     { identity },
   );
 
-  at.addGrant({ roomJoin: true, room });
+  at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
   return at.toJwt();
 }

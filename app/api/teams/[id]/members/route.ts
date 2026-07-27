@@ -43,20 +43,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const teamId = (await params).id;
   const { userId: targetUserId, role } = await req.json();
 
+  if (!targetUserId) {
+    return NextResponse.json({ error: "userId is required" }, { status: 400 });
+  }
+
   const current = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: userId, teamId } },
   });
-  if (!current || current.role === "MEMBER") {
+  if (!current) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const member = await prisma.teamMember.create({
-    data: { userId, teamId, role: role || "MEMBER" },
-    include: { user: { select: { id: true, name: true, username: true, email: true } } },
-  });
+  try {
+    const member = await prisma.teamMember.create({
+      data: { userId: targetUserId, teamId, role: role || "MEMBER" },
+      include: { user: { select: { id: true, name: true, username: true, email: true } } },
+    });
 
-  await cacheDel(`user:${userId}:teams`);
-  return NextResponse.json({ member }, { status: 201 });
+    await cacheDel(`user:${targetUserId}:teams`);
+    await cacheDel(`user:${userId}:teams`);
+    return NextResponse.json({ member }, { status: 201 });
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "User is already a member of this team" }, { status: 400 });
+    }
+    throw error;
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,14 +87,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  if (userId === userId) {
+  if (userId === targetUserId) {
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
   }
 
   await prisma.teamMember.delete({
-    where: { userId_teamId: { userId, teamId } },
+    where: { userId_teamId: { userId: targetUserId, teamId } },
   });
 
+  await cacheDel(`user:${targetUserId}:teams`);
   await cacheDel(`user:${userId}:teams`);
   return NextResponse.json({ success: true });
 }

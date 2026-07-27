@@ -6,16 +6,49 @@ import { prisma } from "@/lib/prisma";
 export async function POST(req: Request) {
   try {
     const { userId: authUserId } = await auth();
-  const userId = authUserId as string;
+    const userId = authUserId as string;
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { type, receiverId, roomId, isVideo, callerName, payload } = body;
+    const { type, receiverId, roomId, isVideo, callerName, payload, teamId } = body;
 
-    if (!receiverId || !type) {
+    if (!type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (type === "INCOMING_CHANNEL_CALL") {
+      if (!teamId || !roomId) {
+        return NextResponse.json({ error: "teamId and roomId required for channel calls" }, { status: 400 });
+      }
+      
+      const members = await prisma.teamMember.findMany({ where: { teamId } });
+      
+      if (redis) {
+        for (const member of members) {
+          if (member.userId !== userId) {
+            await redis.publish(
+              `user:${member.userId}`,
+              JSON.stringify({
+                id: `call-sig-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                type,
+                roomId,
+                isVideo,
+                callerId: userId,
+                callerName,
+                payload, // Can include channelName
+                timestamp: new Date().toISOString()
+              })
+            );
+          }
+        }
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (!receiverId) {
+      return NextResponse.json({ error: "receiverId is required for 1-1 calls" }, { status: 400 });
     }
 
     if (type === "INCOMING_CALL") {
@@ -54,25 +87,27 @@ export async function POST(req: Request) {
 
     // Broadcast via Redis
     if (redis) {
-      await redis.publish(
-        `user:${receiverId}`,
-        JSON.stringify({
-          id: `call-sig-${Date.now()}`,
-          type,
-          roomId,
-          isVideo,
-          callerId: userId,
-          callerName,
-          payload,
-          timestamp: new Date().toISOString()
-        })
-      );
+      const messagePayload = JSON.stringify({
+        id: `call-sig-${Date.now()}`,
+        type,
+        roomId,
+        isVideo,
+        callerId: userId,
+        callerName,
+        payload,
+        forEveryone: body.forEveryone || false,
+        timestamp: new Date().toISOString()
+      });
+
+      await redis.publish(`user:${receiverId}`, messagePayload);
+      if (body.forEveryone === true) {
+        await redis.publish("calls:broadcast", messagePayload);
+      }
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Call Signal Error:", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal Error", message: error?.message, stack: error?.stack }, { status: 500 });
   }
 }
-

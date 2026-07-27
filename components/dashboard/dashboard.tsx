@@ -8,6 +8,7 @@ import { ChatView } from "@/components/chat/chat-view";
 import { ThreadPanel } from "@/components/messages/thread-panel";
 import { CallWindow } from "@/components/calls/CallWindow";
 import { IncomingCallModal } from "@/components/calls/IncomingCallModal";
+import MeetingRoom from "@/components/meeting/MeetingRoom";
 import { OutgoingCallModal } from "@/components/calls/OutgoingCallModal";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
@@ -67,9 +68,37 @@ export function Dashboard() {
   const [notifBadge, setNotifBadge] = useState(0);
 
   // Call States
-  const [incomingCall, setIncomingCall] = useState<{ roomId: string; callerName: string; isVideo: boolean; callerId: string } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ roomId: string; callerName: string; isVideo: boolean; callerId: string; isChannelCall?: boolean; channelName?: string; } | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<{ roomId: string; receiverName: string; isVideo: boolean; receiverId: string } | null>(null);
   const [activeCall, setActiveCall] = useState<{ roomId: string; otherUserName: string; otherUserId: string; isVideo: boolean; isCaller: boolean } | null>(null);
+  const [meetingRoomDetails, setMeetingRoomDetails] = useState<{ token: string; serverUrl: string; meetingId: string } | null>(null);
+
+  useEffect(() => {
+    if (activeMeeting) {
+      const fetchToken = async () => {
+        try {
+          const res = await fetch("/api/livekit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ room: activeMeeting.id })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setMeetingRoomDetails({
+              token: data.token,
+              serverUrl: data.url,
+              meetingId: activeMeeting.id
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching meeting room details:", err);
+        }
+      };
+      fetchToken();
+    } else {
+      setMeetingRoomDetails(null);
+    }
+  }, [activeMeeting]);
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -143,20 +172,46 @@ export function Dashboard() {
               isVideo: msg.isVideo,
               callerId: msg.callerId,
             });
+          } else if (msg.type === "INCOMING_CHANNEL_CALL") {
+            setIncomingCall({
+              roomId: msg.roomId,
+              callerName: msg.callerName,
+              isVideo: msg.isVideo,
+              callerId: msg.callerId,
+              isChannelCall: true,
+              channelName: msg.payload?.channelName,
+            });
           } else if (msg.type === "ACCEPT_CALL") {
             setOutgoingCall(null);
             setIncomingCall(null);
-            setActiveCall(prev => prev ? { ...prev, isCaller: true, otherUserId: msg.callerId } : {
-               roomId: msg.roomId,
-               otherUserName: msg.callerName || "Call User",
-               otherUserId: msg.callerId,
-               isVideo: msg.isVideo ?? false,
-               isCaller: true,
-            });
-          } else if (msg.type === "REJECT_CALL" || msg.type === "END_CALL") {
+            if (!activeMeeting) {
+              dispatch(setActiveMeeting({
+                id: msg.roomId,
+                title: `Call with ${msg.callerName || "User"}`,
+                organizer: msg.callerName || "User",
+                date: new Date().toISOString().split("T")[0],
+                startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                endTime: "",
+                description: "1-on-1 Call",
+                attendees: [currentUser.name, msg.callerName || "User"],
+                isLive: true,
+                isVideo: msg.isVideo ?? true
+              }));
+            }
+          } else if (msg.type === "REJECT_CALL") {
             setIncomingCall(null);
             setOutgoingCall(null);
             setActiveCall(null);
+            if (activeMeeting?.id === msg.roomId) {
+              dispatch(setActiveMeeting(null));
+            }
+          } else if (msg.type === "END_CALL") {
+            setIncomingCall(null);
+            setOutgoingCall(null);
+            setActiveCall(null);
+            if (msg.forEveryone === true && activeMeeting?.id === msg.roomId) {
+              dispatch(setActiveMeeting(null));
+            }
           } else if (msg.type.startsWith("WEBRTC_")) {
             const customEvent = new CustomEvent("webrtc-signal", { detail: msg });
             window.dispatchEvent(customEvent);
@@ -319,19 +374,58 @@ export function Dashboard() {
   };
 
   const handleStartCall = async (isVideo: boolean) => {
-      if (!currentUser || !activeChatId) return; // Only allow calling in 1-1 chats
+      if (!currentUser) return;
+
+      if (activeView === "teams" && activeChannel && activeTeam) {
+        dispatch(setActiveMeeting({
+          id: activeChannel.id,
+          title: `# ${activeChannel.name}`,
+          organizer: currentUser.name,
+          date: new Date().toISOString().split("T")[0],
+          startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          endTime: "",
+          description: "Channel Meeting",
+          attendees: [currentUser.name],
+          isLive: true,
+          isVideo: isVideo
+        }));
+        
+        // Broadcast the channel call to teammates
+        fetch("/api/calls/signal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "INCOMING_CHANNEL_CALL",
+            teamId: activeTeam.id,
+            roomId: activeChannel.id,
+            isVideo: isVideo,
+            callerName: currentUser.name,
+            payload: { channelName: activeChannel.name }
+          })
+        }).catch(err => console.error("Failed to broadcast channel call:", err));
+        
+        return;
+      }
+      
+      if (!activeChatId) return; // Only allow calling in 1-1 chats
       
       const otherUser = activeChat?.participants.find(p => p.id !== currentUser.id);
       if (!otherUser) return;
   
       const roomId = `call_${currentUser.id}_${otherUser.id}_${Date.now()}`;
       
-      setOutgoingCall({
-        roomId,
-        receiverName: otherUser.name,
-        isVideo,
-        receiverId: otherUser.id,
-      });
+      dispatch(setActiveMeeting({
+        id: roomId,
+        title: `Call with ${otherUser.name}`,
+        organizer: currentUser.name,
+        date: new Date().toISOString().split("T")[0],
+        startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        endTime: "",
+        description: "1-on-1 Call",
+        attendees: [currentUser.name, otherUser.name],
+        isLive: true,
+        isVideo: isVideo
+      }));
   
       await fetch("/api/calls/signal", {
         method: "POST",
@@ -349,29 +443,58 @@ export function Dashboard() {
   const handleAcceptCall = async () => {
     if (!incomingCall || !currentUser) return;
     
-    setActiveCall({
-      roomId: incomingCall.roomId,
-      otherUserName: incomingCall.callerName,
-      otherUserId: incomingCall.callerId,
-      isVideo: incomingCall.isVideo,
-      isCaller: false,
-    });
+    if (incomingCall.isChannelCall) {
+      dispatch(setActiveMeeting({
+        id: incomingCall.roomId,
+        title: `# ${incomingCall.channelName || "Channel"}`,
+        organizer: incomingCall.callerName,
+        date: new Date().toISOString().split("T")[0],
+        startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        endTime: "",
+        description: "Channel Meeting",
+        attendees: [currentUser.name, incomingCall.callerName],
+        isLive: true,
+        isVideo: incomingCall.isVideo
+      }));
+      setIncomingCall(null);
+      return;
+    }
     
     const receiverId = incomingCall.callerId;
     const roomId = incomingCall.roomId;
-    setIncomingCall(null);
+    const isVideo = incomingCall.isVideo;
+    const callerName = incomingCall.callerName;
 
-    await fetch("/api/calls/signal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "ACCEPT_CALL",
-        receiverId,
-        roomId,
-        callerName: currentUser.name,
-        isVideo: incomingCall.isVideo,
-      })
-    });
+    try {
+      await fetch("/api/calls/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "ACCEPT_CALL",
+          receiverId,
+          roomId,
+          callerName: currentUser.name,
+          isVideo,
+        })
+      });
+    } catch (err) {
+      console.error("Failed to send ACCEPT_CALL handshake:", err);
+    }
+
+    dispatch(setActiveMeeting({
+      id: roomId,
+      title: `Call with ${callerName}`,
+      organizer: callerName,
+      date: new Date().toISOString().split("T")[0],
+      startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      endTime: "",
+      description: "1-on-1 Call",
+      attendees: [currentUser.name, callerName],
+      isLive: true,
+      isVideo,
+    }));
+    
+    setIncomingCall(null);
   };
 
   const handleRejectCall = async () => {
@@ -597,7 +720,13 @@ export function Dashboard() {
         badges={badges}
       />
 
-      {activeCall ? (
+      {meetingRoomDetails ? (
+        <MeetingRoom
+          token={meetingRoomDetails.token}
+          serverUrl={meetingRoomDetails.serverUrl}
+          meetingId={meetingRoomDetails.meetingId}
+        />
+      ) : activeCall ? (
         <CallWindow
           roomId={activeCall.roomId}
           isCaller={activeCall.isCaller}
@@ -958,6 +1087,8 @@ export function Dashboard() {
           isVideo={incomingCall.isVideo}
           onAccept={handleAcceptCall}
           onReject={handleRejectCall}
+          isChannelCall={incomingCall.isChannelCall}
+          channelName={incomingCall.channelName}
         />
       )}
 

@@ -85,6 +85,7 @@ export interface CalendarMeeting {
   description: string;
   attendees: string[];
   isLive?: boolean;
+  isVideo?: boolean;
 }
 
 export type CalendarViewType = 'month' | 'week' | 'day';

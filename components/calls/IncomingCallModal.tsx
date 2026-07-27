@@ -8,9 +8,11 @@ interface IncomingCallModalProps {
   isVideo: boolean;
   onAccept: () => void;
   onReject: () => void;
+  isChannelCall?: boolean;
+  channelName?: string;
 }
 
-export function IncomingCallModal({ callerName, isVideo, onAccept, onReject }: IncomingCallModalProps) {
+export function IncomingCallModal({ callerName, isVideo, onAccept, onReject, isChannelCall, channelName }: IncomingCallModalProps) {
   const [ringTime, setRingTime] = useState(0);
 
   useEffect(() => {
@@ -32,8 +34,12 @@ export function IncomingCallModal({ callerName, isVideo, onAccept, onReject }: I
           {callerName.charAt(0)}
         </div>
         <h3 className="text-lg font-bold text-[var(--text-primary)]">{callerName}</h3>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Incoming {isVideo ? "video" : "audio"} call... {ringTime}s
+        <p className="text-sm text-[var(--text-secondary)] mb-6 text-center">
+          {isChannelCall ? (
+            <>Incoming channel {isVideo ? "video" : "audio"} call in <br/><span className="font-bold">#{channelName}</span>... {ringTime}s</>
+          ) : (
+            <>Incoming {isVideo ? "video" : "audio"} call... {ringTime}s</>
+          )}
         </p>
 
         <div className="flex gap-4 w-full">

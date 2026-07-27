@@ -89,6 +89,9 @@ export const ListPanel = ({
   const [membersModalTeam, setMembersModalTeam] = useState<string | null>(null);
   const [loadingMembers, setLoadingMembers] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'team' | 'channel'; id: string; teamId?: string } | null>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [addingMemberId, setAddingMemberId] = useState<string | null>(null);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
 
   const [callInput, setCallInput] = useState('');
 
@@ -180,6 +183,35 @@ export const ListPanel = ({
 
   const toggleTeam = (teamId: string) => {
     setExpandedTeams(prev => ({ ...prev, [teamId]: !prev[teamId] }));
+  };
+
+  const handleAddTeamMember = async (targetUserId: string) => {
+    if (!membersModalTeam) return;
+    setAddingMemberId(targetUserId);
+    setAddMemberError(null);
+    try {
+      const res = await fetch(`/api/teams/${membersModalTeam}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUserId, role: 'MEMBER' })
+      });
+      if (res.ok) {
+        // Refetch members
+        const membersRes = await fetch(`/api/teams/${membersModalTeam}/members`);
+        if (membersRes.ok) {
+          const data = await membersRes.json();
+          setTeamMembers(data.members);
+        }
+        setMemberSearchQuery('');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setAddMemberError(errData.error || 'Failed to add member');
+      }
+    } catch (err) {
+      setAddMemberError('An error occurred');
+    } finally {
+      setAddingMemberId(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -886,35 +918,103 @@ export const ListPanel = ({
         }}
       />
 
-      {membersModalTeam && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden">
-            <div className="h-12 bg-[var(--bg-tertiary)] px-4 flex items-center justify-between border-b border-[var(--border-color)]">
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">Team Members</h3>
-              <button onClick={() => setMembersModalTeam(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-lg">&times;</button>
-            </div>
-            <div className="p-4 max-h-80 overflow-y-auto space-y-1.5">
-              {teamMembers.length === 0 && <p className="text-xs text-[var(--text-secondary)] text-center py-4">No members found.</p>}
-              {teamMembers.map((m: any) => (
-                <div key={m.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-[var(--bg-tertiary)] transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#374151] text-white font-semibold text-xs flex items-center justify-center">
-                      {m.name?.charAt(0) || '?'}
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-[var(--text-primary)]">{m.name}</p>
-                      <p className="text-[10px] text-[var(--text-secondary)]">{m.email}</p>
-                    </div>
+      {membersModalTeam && (() => {
+        const availableUsers = allUsers.filter(u => 
+          !teamMembers.some(tm => tm.id === u.id) &&
+          (u.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) || 
+           u.email.toLowerCase().includes(memberSearchQuery.toLowerCase()))
+        );
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="h-12 bg-[var(--bg-tertiary)] px-4 flex items-center justify-between border-b border-[var(--border-color)]">
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">Team Members</h3>
+                <button 
+                  onClick={() => {
+                    setMembersModalTeam(null);
+                    setMemberSearchQuery('');
+                    setAddMemberError(null);
+                  }} 
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-lg transition-colors"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Add Member section (visible to all members) */}
+              <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-tertiary)]/20 space-y-3">
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">Add Member</p>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search users to add..."
+                      value={memberSearchQuery}
+                      onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder-gray-500 text-xs rounded-xl pl-9 pr-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    />
                   </div>
-                  <span className={`text-[10px] font-medium ${m.role === 'OWNER' ? 'text-amber-400' : 'text-gray-500'}`}>
-                    {m.role}
-                  </span>
+
+                  {addMemberError && (
+                    <p className="text-[10px] text-red-400 font-semibold px-1">{addMemberError}</p>
+                  )}
+
+                  {memberSearchQuery.trim() !== '' && (
+                    <div className="mt-2 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-xl max-h-36 overflow-y-auto divide-y divide-[var(--border-color)]/50 shadow-inner">
+                      {availableUsers.length === 0 ? (
+                        <p className="text-[11px] text-[var(--text-secondary)] text-center py-3">No matching users found.</p>
+                      ) : (
+                        availableUsers.map((u) => (
+                          <div key={u.id} className="flex items-center justify-between p-2 hover:bg-[var(--bg-secondary)]/50 transition-colors">
+                            <div className="min-w-0 flex-1 pr-2">
+                              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{u.name}</p>
+                              <p className="text-[9px] text-[var(--text-secondary)] truncate">{u.email}</p>
+                            </div>
+                            <button
+                              onClick={() => handleAddTeamMember(u.id)}
+                              disabled={addingMemberId === u.id}
+                              className="bg-[#6366F1] hover:bg-[#5053e1] disabled:bg-[#6366F1]/50 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              {addingMemberId === u.id ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3" /> Add
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
+              
+              <div className="p-4 overflow-y-auto space-y-1.5 flex-1">
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono mb-2">Current Members</p>
+                {teamMembers.length === 0 && <p className="text-xs text-[var(--text-secondary)] text-center py-4">No members found.</p>}
+                {teamMembers.map((m: any) => (
+                  <div key={m.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-[var(--bg-tertiary)] transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#374151] text-white font-semibold text-xs flex items-center justify-center">
+                        {m.name?.charAt(0) || '?'}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">{m.name}</p>
+                        <p className="text-[10px] text-[var(--text-secondary)]">{m.email}</p>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-medium ${m.role === 'OWNER' ? 'text-amber-400' : 'text-gray-500'}`}>
+                      {m.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <ConfirmModal
         open={deleteConfirm?.type === 'team'}
