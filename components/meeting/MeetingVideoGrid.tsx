@@ -1,7 +1,7 @@
 "use client";
 
-import { useParticipants, useTracks, VideoTrack } from "@livekit/components-react";
-import { Track, Participant } from "livekit-client";
+import { useParticipants, useTracks, VideoTrack, useConnectionState } from "@livekit/components-react";
+import { Track, Participant, ConnectionState } from "livekit-client";
 import { Users, Share2, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import CustomParticipantTile from "./CustomParticipantTile";
@@ -12,6 +12,7 @@ interface MeetingVideoGridProps {
 
 export default function MeetingVideoGrid({ meetingId }: MeetingVideoGridProps) {
   const participants = useParticipants();
+  const connectionState = useConnectionState();
   const screenShareTracks = useTracks([Track.Source.ScreenShare], { onlySubscribed: false });
   const [copied, setCopied] = useState(false);
 
@@ -36,8 +37,8 @@ export default function MeetingVideoGrid({ meetingId }: MeetingVideoGridProps) {
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
-      {/* Waiting for others banner when only local participant is connected */}
-      {participants.length === 1 && (
+      {/* Waiting for others banner when only local participant is connected and room is fully connected */}
+      {connectionState === ConnectionState.Connected && participants.length === 1 && (
         <div className="mb-4 flex items-center justify-between gap-4 bg-slate-900/90 border border-slate-800/80 px-4 py-2.5 rounded-xl shadow-lg backdrop-blur-md max-w-md w-full animate-in fade-in duration-300">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">

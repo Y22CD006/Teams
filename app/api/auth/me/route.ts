@@ -28,6 +28,13 @@ export async function GET() {
       });
     }
 
+    if (user && (!user.name || user.name === user.id)) {
+      user = {
+        ...user,
+        name: user.username || user.email?.split("@")[0] || user.id,
+      };
+    }
+
     return NextResponse.json({ user }, { status: 200 });
   } catch (error) {
     console.error("GET /api/auth/me error:", error);

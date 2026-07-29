@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { cacheGet, cacheSet } from "@/lib/redis";
@@ -24,16 +24,21 @@ export async function GET() {
     orderBy: { name: "asc" },
   });
 
-  const mapped = users.map((u) => ({
-    id: u.id,
-    name: u.name || u.username || u.email,
-    avatar: (u.name || u.email).charAt(0).toUpperCase(),
-    role: "",
-    status: u.status.toLowerCase() as "online" | "busy" | "away" | "offline",
-    email: u.email,
-  }));
+  const mapped = users.map((u) => {
+    let displayName = u.name;
+    if (!displayName || displayName === u.id) {
+      displayName = u.username || u.email?.split("@")[0] || u.id;
+    }
+    return {
+      id: u.id,
+      name: displayName,
+      avatar: displayName.charAt(0).toUpperCase(),
+      role: "",
+      status: u.status.toLowerCase() as "online" | "busy" | "away" | "offline",
+      email: u.email,
+    };
+  });
 
   await cacheSet("global:users", { users: mapped }, 30);
   return NextResponse.json({ users: mapped });
 }
-

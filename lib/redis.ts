@@ -8,16 +8,31 @@ const globalForRedis = globalThis as unknown as {
 
 if (!globalForRedis.cache) {
   globalForRedis.cache = new Map();
+} else {
+  globalForRedis.cache.clear();
 }
 
 class MockRedis extends EventEmitter {
   private activeIntervals: NodeJS.Timeout[] = [];
   
   async get(key: string) {
-    return globalForRedis.cache.get(key) || null;
+    const item = globalForRedis.cache.get(key);
+    if (!item) return null;
+    if (item.expiry && Date.now() > item.expiry) {
+      globalForRedis.cache.delete(key);
+      return null;
+    }
+    return item.val || null;
   }
   async set(key: string, value: string, ...args: any[]) {
-    globalForRedis.cache.set(key, value);
+    let ttlMs: number | undefined = undefined;
+    if (args[0] === "EX" && typeof args[1] === "number") {
+      ttlMs = args[1] * 1000;
+    }
+    globalForRedis.cache.set(key, {
+      val: value,
+      expiry: ttlMs ? Date.now() + ttlMs : undefined,
+    });
   }
   async del(key: string) {
     globalForRedis.cache.delete(key);

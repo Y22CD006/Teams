@@ -10,6 +10,7 @@ interface UiState {
   activeThreadParent: Message | null;
   activeMeeting: CalendarMeeting | null;
   activeFileView: string;
+  fileSearchQuery: string;
   selectedMeetingId: string | null;
   showSettingsModal: boolean;
 }
@@ -23,6 +24,7 @@ const initialState: UiState = {
   activeThreadParent: null,
   activeMeeting: null,
   activeFileView: "f-recents",
+  fileSearchQuery: "",
   selectedMeetingId: null,
   showSettingsModal: false,
 };
@@ -58,6 +60,9 @@ const uiSlice = createSlice({
     setActiveFileView(state, action: PayloadAction<string>) {
       state.activeFileView = action.payload;
     },
+    setFileSearchQuery(state, action: PayloadAction<string>) {
+      state.fileSearchQuery = action.payload;
+    },
     setSelectedMeetingId(state, action: PayloadAction<string | null>) {
       state.selectedMeetingId = action.payload;
     },
@@ -70,7 +75,7 @@ const uiSlice = createSlice({
 export const {
   setTheme, toggleTheme,
   setActiveView, setActiveChatId, setActiveTeamId, setActiveChannelId,
-  setActiveThreadParent, setActiveMeeting, setActiveFileView,
+  setActiveThreadParent, setActiveMeeting, setActiveFileView, setFileSearchQuery,
   setSelectedMeetingId, setShowSettingsModal,
 } = uiSlice.actions;
 export default uiSlice.reducer;

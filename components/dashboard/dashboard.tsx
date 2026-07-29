@@ -9,6 +9,7 @@ import { ThreadPanel } from "@/components/messages/thread-panel";
 import { CallWindow } from "@/components/calls/CallWindow";
 import { IncomingCallModal } from "@/components/calls/IncomingCallModal";
 import MeetingRoom from "@/components/meeting/MeetingRoom";
+import { WorkspaceVoiceCall } from "@/components/calls/WorkspaceVoiceCall";
 import { OutgoingCallModal } from "@/components/calls/OutgoingCallModal";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { FilesView } from "@/components/files/files-view";
@@ -20,13 +21,13 @@ import {
 } from "@/lib/store/authSlice";
 import {
   setActiveView, setActiveChatId, setActiveTeamId, setActiveChannelId,
-  setActiveThreadParent, setActiveMeeting, setActiveFileView,
+  setActiveThreadParent, setActiveMeeting, setActiveFileView, setFileSearchQuery,
   setSelectedMeetingId, setShowSettingsModal, toggleTheme,
 } from "@/lib/store/uiSlice";
 import {
   fetchAllData, addChat, addMessage, addReaction, deleteMessage, addReply,
   addTeam, addChannel, removeTeam, removeChannel,
-  addMeeting, addTask, markAsRead
+  addMeeting, addTask, markAsRead, addFile, deleteFile, updateFile
 } from "@/lib/store/dataSlice";
 
 function formatTimeAgo(iso: string): string {
@@ -51,6 +52,7 @@ export function Dashboard() {
   const activeThreadParent = useAppSelector((s) => s.ui.activeThreadParent);
   const activeMeeting = useAppSelector((s) => s.ui.activeMeeting);
   const activeFileView = useAppSelector((s) => s.ui.activeFileView);
+  const fileSearchQuery = useAppSelector((s) => s.ui.fileSearchQuery);
   const selectedMeetingId = useAppSelector((s) => s.ui.selectedMeetingId);
   const showSettingsModal = useAppSelector((s) => s.ui.showSettingsModal);
   const chats = useAppSelector((s) => s.data.chats);
@@ -646,18 +648,42 @@ export function Dashboard() {
 
   const handleUploadFile = (name: string, type: FileItem["type"], size: string) => {
     const newFile: FileItem = {
-      id: `f-${Date.now()}`,
+      id: `f-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       name,
       type,
       size,
-      uploadedBy: currentUser?.name || "Unknown",
+      uploadedBy: currentUser?.name || "You",
       uploadedAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      teamId: activeTeamId || "team-1",
     };
-    // Dispatch to data slice for persistence
+    dispatch(addFile(newFile));
+
+    fetch("/api/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, type, size }),
+    }).catch((err) => console.error("Error saving file:", err));
   };
 
   const handleDeleteFile = (fileId: string) => {
-    // Dispatch to data slice for persistence
+    dispatch(deleteFile(fileId));
+
+    fetch("/api/files", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: fileId }),
+    }).catch((err) => console.error("Error deleting file:", err));
+  };
+
+  const handleRenameFile = (fileId: string, newName: string) => {
+    dispatch(updateFile({ id: fileId, name: newName }));
+
+    fetch("/api/files", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: fileId, name: newName }),
+    }).catch((err) => console.error("Error renaming file:", err));
   };
 
   const handleNewChatTrigger = () => {
@@ -721,11 +747,25 @@ export function Dashboard() {
       />
 
       {meetingRoomDetails ? (
-        <MeetingRoom
-          token={meetingRoomDetails.token}
-          serverUrl={meetingRoomDetails.serverUrl}
-          meetingId={meetingRoomDetails.meetingId}
-        />
+        activeMeeting?.isVideo === false ? (
+          <WorkspaceVoiceCall
+            token={meetingRoomDetails.token}
+            serverUrl={meetingRoomDetails.serverUrl}
+            roomId={meetingRoomDetails.meetingId}
+            channelName={activeMeeting.title?.replace(/^#\s*/, "") || activeChannel?.name}
+            onLeave={() => {
+              dispatch(setActiveMeeting(null));
+              setMeetingRoomDetails(null);
+            }}
+            isHost={activeMeeting.organizer === currentUser?.name}
+          />
+        ) : (
+          <MeetingRoom
+            token={meetingRoomDetails.token}
+            serverUrl={meetingRoomDetails.serverUrl}
+            meetingId={meetingRoomDetails.meetingId}
+          />
+        )
       ) : activeCall ? (
         <CallWindow
           roomId={activeCall.roomId}
@@ -750,6 +790,9 @@ export function Dashboard() {
             onSelectChat={handleSelectChat}
             onSelectChannel={handleSelectChannel}
             onSelectFileView={(v) => dispatch(setActiveFileView(v))}
+            activeFileView={activeFileView}
+            fileSearchQuery={fileSearchQuery}
+            onSearchFile={(query) => dispatch(setFileSearchQuery(query))}
             onJoinMeeting={handleJoinMeeting}
             onNewChat={handleNewChatTrigger}
             onNewMeeting={() => dispatch(setActiveView("calendar"))}
@@ -786,12 +829,16 @@ export function Dashboard() {
             {activeView === "files" && (
               <FilesView
                 files={files}
+                activeFileView={activeFileView}
+                fileSearchQuery={fileSearchQuery}
+                onSearchFile={(query) => dispatch(setFileSearchQuery(query))}
+                currentUserId={currentUser.id}
+                currentUserName={currentUser.name}
                 onUploadFile={handleUploadFile}
                 onDeleteFile={handleDeleteFile}
+                onRenameFile={handleRenameFile}
               />
-            )}
-
-            {activeView === "people" && (
+            )}{activeView === "people" && (
               <PeopleView currentUserId={currentUser.id} />
             )}
 

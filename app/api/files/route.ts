@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
@@ -74,3 +74,49 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ file }, { status: 201 });
 }
 
+export async function DELETE(req: NextRequest) {
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await req.json();
+    if (id) {
+      await prisma.storedFile.deleteMany({
+        where: { id, uploadedById: session.userId },
+      });
+    }
+  } catch (err) {
+    console.error("Error deleting file in DB:", err);
+  }
+
+  await cacheDel(`user:${session.userId}:files`);
+  return NextResponse.json({ success: true });
+}
+
+export async function PATCH(req: NextRequest) {
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id, name } = await req.json();
+    if (id && name) {
+      await prisma.storedFile.updateMany({
+        where: { id, uploadedById: session.userId },
+        data: { name },
+      });
+    }
+  } catch (err) {
+    console.error("Error updating file in DB:", err);
+  }
+
+  await cacheDel(`user:${session.userId}:files`);
+  return NextResponse.json({ success: true });
+}

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "livekit": "livekit-server\\livekit-server.exe --dev --config livekit.yaml",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -85,6 +85,14 @@ export async function POST(req: Request) {
       }
     }
 
+    let finalCallerName = callerName;
+    if (!finalCallerName || finalCallerName === userId || finalCallerName.startsWith("cmr")) {
+      const callerUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (callerUser) {
+        finalCallerName = callerUser.name || callerUser.username || callerUser.email?.split('@')[0] || userId;
+      }
+    }
+
     // Broadcast via Redis
     if (redis) {
       const messagePayload = JSON.stringify({
@@ -93,7 +101,7 @@ export async function POST(req: Request) {
         roomId,
         isVideo,
         callerId: userId,
-        callerName,
+        callerName: finalCallerName,
         payload,
         forEveryone: body.forEveryone || false,
         timestamp: new Date().toISOString()

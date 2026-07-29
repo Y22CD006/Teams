@@ -25,6 +25,9 @@ interface ListPanelProps {
   onNewMeeting: () => void;
   onDialCall: (user: any, isVideo: boolean) => void;
   onSelectMeeting: (meetingId: string) => void;
+  activeFileView?: string;
+  fileSearchQuery?: string;
+  onSearchFile?: (query: string) => void;
 }
 
 function formatTimeAgo(iso: string): string {
@@ -67,6 +70,9 @@ export const ListPanel = ({
   onNewMeeting,
   onDialCall,
   onSelectMeeting,
+  activeFileView,
+  fileSearchQuery,
+  onSearchFile,
 }: ListPanelProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({
@@ -343,8 +349,14 @@ export const ListPanel = ({
               id="search-filter-input"
               type="text"
               placeholder={`Search ${activeView}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={activeView === 'files' ? (fileSearchQuery !== undefined ? fileSearchQuery : searchQuery) : searchQuery}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (activeView === 'files' && onSearchFile) {
+                  onSearchFile(val);
+                }
+              }}
               className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder-gray-400 text-xs rounded-lg pl-8 pr-3 py-2 border border-[var(--border-color)] focus:outline-none focus:ring-1 focus:ring-[#6366F1] focus:border-[#6366F1] transition-all"
             />
             <Search className="w-3.5 h-3.5 text-[var(--text-secondary)] absolute left-2.5 top-2.5" />
@@ -883,18 +895,25 @@ export const ListPanel = ({
               { id: 'f-recents', label: 'Recent Documents', icon: Clock },
               { id: 'f-my', label: 'My Cloud Drive', icon: FileText },
               { id: 'f-teams', label: 'Shared Workspaces', icon: Star },
-            ].map((cat) => (
-              <div
-                key={cat.id}
-                onClick={() => onSelectFileView(cat.id)}
-                className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-[#1F2937] text-[var(--text-primary)] hover:text-[var(--text-primary)] transition-all duration-150 border border-transparent hover:border-[#374151]"
-              >
-                <div className="p-1 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-                  <cat.icon className="w-4 h-4 text-indigo-400" />
+            ].map((cat) => {
+              const isActive = activeFileView === cat.id;
+              return (
+                <div
+                  key={cat.id}
+                  onClick={() => onSelectFileView(cat.id)}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-150 border ${
+                    isActive
+                      ? 'bg-[var(--bg-tertiary)] border-[#6366F1] text-[#6366F1] font-bold shadow-sm'
+                      : 'border-transparent text-[var(--text-primary)] hover:bg-[#1F2937] hover:border-[#374151]'
+                  }`}
+                >
+                  <div className={`p-1 rounded ${isActive ? 'bg-[#6366F1]/15 text-[#6366F1]' : 'bg-[var(--bg-tertiary)] text-indigo-400'} border border-[var(--border-color)]`}>
+                    <cat.icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs">{cat.label}</span>
                 </div>
-                <span className="text-xs font-semibold">{cat.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

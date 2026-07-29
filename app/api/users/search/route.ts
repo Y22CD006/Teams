@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
@@ -34,6 +34,17 @@ export async function GET(req: NextRequest) {
     take: 20,
   });
 
-  return NextResponse.json({ users });
+  const mapped = users.map((u) => {
+    let displayName = u.name;
+    if (!displayName || displayName === u.id) {
+      displayName = u.username || u.email?.split("@")[0] || u.id;
+    }
+    return {
+      ...u,
+      name: displayName,
+    };
+  });
+
+  return NextResponse.json({ users: mapped });
 }
 

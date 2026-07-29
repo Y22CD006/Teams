@@ -12,12 +12,133 @@ interface DataState {
   loading: boolean;
 }
 
+export const initialMockFiles: FileItem[] = [
+  {
+    id: "f-101",
+    name: "apollo-design-system-spec-v3.pdf",
+    type: "pdf",
+    size: "4.2 MB",
+    uploadedBy: "You",
+    uploadedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-102",
+    name: "sprint-roadmap-q3-financials.xlsx",
+    type: "xls",
+    size: "1.8 MB",
+    uploadedBy: "Sarah Jenkins",
+    uploadedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-103",
+    name: "apollo-tokens-config.json",
+    type: "code",
+    size: "84.0 KB",
+    uploadedBy: "You",
+    uploadedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "f-104",
+    name: "q2-revenue-projections.csv",
+    type: "xls",
+    size: "520.0 KB",
+    uploadedBy: "Marcus Chen",
+    uploadedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-2",
+  },
+  {
+    id: "f-105",
+    name: "auth-middleware-jwt.ts",
+    type: "code",
+    size: "14.2 KB",
+    uploadedBy: "Elena Rostova",
+    uploadedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-106",
+    name: "cloud-infrastructure-architecture.pdf",
+    type: "pdf",
+    size: "8.5 MB",
+    uploadedBy: "David Kim",
+    uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-2",
+  },
+  {
+    id: "f-107",
+    name: "devops-k8s-prod-deployment.yaml",
+    type: "code",
+    size: "32.1 KB",
+    uploadedBy: "You",
+    uploadedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-108",
+    name: "security-audit-report-2026.pdf",
+    type: "pdf",
+    size: "6.1 MB",
+    uploadedBy: "Sarah Jenkins",
+    uploadedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-109",
+    name: "employee-onboarding-handbook.docx",
+    type: "doc",
+    size: "2.4 MB",
+    uploadedBy: "You",
+    uploadedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "f-110",
+    name: "database-schema-migrations.sql",
+    type: "code",
+    size: "45.0 KB",
+    uploadedBy: "Marcus Chen",
+    uploadedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+  {
+    id: "f-111",
+    name: "marketing-campaign-metrics-2026.xlsx",
+    type: "xls",
+    size: "3.1 MB",
+    uploadedBy: "You",
+    uploadedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-2",
+  },
+  {
+    id: "f-112",
+    name: "app-layout-component-tree.md",
+    type: "code",
+    size: "18.5 KB",
+    uploadedBy: "Elena Rostova",
+    uploadedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    lastModified: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    teamId: "team-1",
+  },
+];
+
 const initialState: DataState = {
   chats: [],
   teams: [],
   meetings: [],
   tasks: [],
-  files: [],
+  files: initialMockFiles,
   threadReplies: [],
   allUsers: [],
   loading: true,
@@ -203,6 +324,24 @@ const dataSlice = createSlice({
     deleteTask(state, action: PayloadAction<string>) {
       state.tasks = state.tasks.filter((t) => t.id !== action.payload);
     },
+    setFiles(state, action: PayloadAction<FileItem[]>) {
+      state.files = action.payload;
+    },
+    addFile(state, action: PayloadAction<FileItem>) {
+      state.files.unshift(action.payload);
+    },
+    deleteFile(state, action: PayloadAction<string>) {
+      state.files = state.files.filter((f) => f.id !== action.payload);
+    },
+    updateFile(state, action: PayloadAction<{ id: string; name?: string; type?: FileItem['type']; size?: string }>) {
+      const f = state.files.find((file) => file.id === action.payload.id);
+      if (f) {
+        if (action.payload.name !== undefined) f.name = action.payload.name;
+        if (action.payload.type !== undefined) f.type = action.payload.type;
+        if (action.payload.size !== undefined) f.size = action.payload.size;
+        f.lastModified = new Date().toISOString();
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -212,7 +351,10 @@ const dataSlice = createSlice({
         state.chats = action.payload.chats;
         state.meetings = action.payload.meetings;
         state.tasks = action.payload.tasks;
-        state.files = action.payload.files;
+        const dbFiles = action.payload.files || [];
+        const existingIds = new Set(dbFiles.map((f: any) => f.id));
+        const nonDuplicateMocks = initialMockFiles.filter(f => !existingIds.has(f.id));
+        state.files = [...dbFiles, ...nonDuplicateMocks];
         state.allUsers = action.payload.users;
         state.loading = false;
       })
@@ -225,5 +367,6 @@ export const {
   addMessage, markAsRead, addReaction, deleteMessage, addReply,
   removeTeam, removeChannel,
   addMeeting, addTask, updateTaskStatus, deleteTask,
+  setFiles, addFile, deleteFile, updateFile,
 } = dataSlice.actions;
 export default dataSlice.reducer;
