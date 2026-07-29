@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["buffalo-squid-jingling.ngrok-free.dev"],
+  output: "standalone",
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "img.clerk.com" },

@@ -1,6 +1,6 @@
 "use server";
 
-import { getAuthUserId, requireAuth } from "@/lib/clerk";
+import { auth } from "@/lib/auth";
 import * as calendarService from "@/lib/services/calendar-service";
 
 export async function createEventAction(data: {
@@ -12,13 +12,13 @@ export async function createEventAction(data: {
   meetingLink?: string;
   attendeeIds: string[];
 }) {
-  const userId = await getAuthUserId();
-  requireAuth(userId);
-  return calendarService.createEvent({ ...data, creatorId: userId });
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+  return calendarService.createEvent({ ...data, creatorId: userId as string });
 }
 
 export async function getEventsAction(start: Date, end: Date) {
-  const userId = await getAuthUserId();
-  requireAuth(userId);
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
   return calendarService.getEventsForUser(userId, start, end);
 }

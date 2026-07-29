@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -21,8 +22,8 @@ export async function GET(req: NextRequest) {
     "Connection": "keep-alive",
   });
 
-  let subscriber: import("ioredis").Redis | null = null;
-  let closed = false;
+  const enc = new TextEncoder();
+  let subscriber: any = null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
       const pingInterval = setInterval(() => {
         if (closed) { clearInterval(pingInterval); return; }
         try {
-          controller.enqueue(`: ping\n\n`);
+          controller.enqueue(enc.encode(": ping\n\n"));
         } catch {
           clearInterval(pingInterval);
         }
@@ -67,22 +68,31 @@ export async function GET(req: NextRequest) {
       try {
         const [teamMemberships, dmMemberships] = await Promise.all([
           prisma.teamMember.findMany({
-            where: { userId: session.userId },
+            where: { userId: userId },
             include: { team: { include: { channels: { select: { id: true } } } } },
           }),
           prisma.dMMember.findMany({
-            where: { userId: session.userId },
+            where: { userId: userId },
             select: { dmId: true },
           })
         ]);
 
-        redisChannels = [
+        const redisChannels = [
+          `user:${userId}`,
           ...dmMemberships.map(d => `message:${d.dmId}`),
           ...teamMemberships.flatMap(m => m.team.channels.map(c => `message:${c.id}`))
         ];
 
         if (redisChannels.length > 0) {
           await subscriber.subscribe(...redisChannels);
+          subscriber.on("message", (_channel: string, message: string) => {
+            if (!redisChannels.includes(_channel)) return;
+            try {
+              controller.enqueue(enc.encode(`data: ${message}\n\n`));
+            } catch {
+              // stream closed
+            }
+          });
         }
       } catch (err) {
         console.error("Redis subscription error:", err);

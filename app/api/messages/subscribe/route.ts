@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redis } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return new Response("Unauthorized", { status: 401 });
   }
@@ -22,8 +24,7 @@ export async function GET(req: NextRequest) {
   const channelName = `message:${channelId || dmId}`;
   const enc = new TextEncoder();
 
-  let subscriber: import("ioredis").Redis | null = null;
-  let closed = false;
+  let subscriber: any = null;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -47,8 +48,8 @@ export async function GET(req: NextRequest) {
         });
       };
 
-      subscriber.on("message", (ch, message) => {
-        if (ch === channelName && !closed) {
+      subscriber.on("message", (ch: string, message: string) => {
+        if (ch === channelName) {
           try {
             controller.enqueue(enc.encode(`data: ${message}\n\n`));
           } catch {
@@ -57,8 +58,9 @@ export async function GET(req: NextRequest) {
         }
       });
 
-      subscriber.on("ready", () => {
-        if (!closed) doSubscribe();
+      subscriber.subscribe(channelName).catch((err: any) => {
+        controller.enqueue(enc.encode(`event: error\ndata: ${err.message}\n\n`));
+        controller.close();
       });
 
       doSubscribe();
@@ -87,3 +89,4 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+

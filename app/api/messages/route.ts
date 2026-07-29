@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redis, cacheDel } from "@/lib/redis";
 
 export async function GET(req: Request) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -51,7 +53,9 @@ function formatReactions(reactions: { emoji: string; user: { id: string } }[]) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { content, channelId, dmId } = await req.json();
@@ -97,3 +101,4 @@ export async function POST(req: NextRequest) {
   await cacheDel(`user:${session.userId}:activity`);
   return NextResponse.json({ message: formatted }, { status: 201 });
 }
+

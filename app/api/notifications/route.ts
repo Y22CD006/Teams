@@ -1,20 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
 export async function GET() {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cacheKey = `user:${session.userId}:notifications`;
+  const cacheKey = `user:${userId}:notifications`;
   const cached = await cacheGet<any>(cacheKey);
   if (cached) return NextResponse.json(cached);
 
   const notifications = await prisma.notification.findMany({
-    where: { userId: session.userId },
+    where: { userId: userId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -35,12 +37,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { userId, type, title, detail, actorId, teamId, channelId } = await req.json();
+  const { userId: targetUserId, type, title, detail, actorId, teamId, channelId } = await req.json();
 
   const notification = await prisma.notification.create({
     data: {
@@ -54,7 +58,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  await cacheDel(`user:${session.userId}:notifications`);
+  await cacheDel(`user:${userId}:notifications`);
   if (userId) await cacheDel(`user:${userId}:notifications`);
   return NextResponse.json({ notification }, { status: 201 });
 }
+

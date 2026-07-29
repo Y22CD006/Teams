@@ -1,85 +1,133 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
-import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(req: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const cacheKey = `user:${session.userId}:meetings`; const cached = await cacheGet<any>(cacheKey); if (cached) return NextResponse.json(cached);
-
-  const events = await prisma.event.findMany({
-    where: {
-      OR: [
-        { creatorId: session.userId },
-        { attendees: { some: { userId: session.userId } } },
-      ],
-    },
-    include: {
-      creator: { select: { id: true, name: true } },
-      attendees: {
-        include: {
-          user: { select: { id: true, name: true } },
-        },
+    console.log("[GET Meetings] Fetching events for user:", userId);
+    const events = await prisma.event.findMany({
+      where: {
+        attendees: { some: { userId } },
       },
-    },
-    orderBy: { startTime: "asc" },
-  });
+      include: {
+        creator: { select: { id: true, name: true } },
+        attendees: { include: { user: { select: { id: true, name: true } } } },
+      },
+      orderBy: { startTime: "asc" },
+    });
 
-  const meetings = events.map((event) => ({
-    id: event.id,
-    title: event.title,
-    organizer: event.creator.name || "Unknown",
-    date: event.startTime.toISOString().split("T")[0],
-    startTime: event.startTime.toISOString().split("T")[1].substring(0, 5),
-    endTime: event.endTime.toISOString().split("T")[1].substring(0, 5),
-    description: event.description || "",
-    attendees: event.attendees.map((a) => a.user.name || "Unknown"),
-    isLive: false,
-  }));
+    // Format database Event objects into CalendarMeeting interface format
+    const formattedMeetings = events.map((event) => {
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      const start = new Date(event.startTime);
+      const end = new Date(event.endTime);
+      
+      const dateStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+      const startTimeStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+      const endTimeStr = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
 
-  await cacheSet(cacheKey, { meetings }, 30);
-  return NextResponse.json({ meetings });
+      return {
+        id: event.id,
+        title: event.title,
+        organizer: event.creator?.name || "Unknown",
+        date: dateStr,
+        startTime: startTimeStr,
+        endTime: endTimeStr,
+        description: event.description || "",
+        attendees: event.attendees.map((att) => att.user.name),
+      };
+    });
+
+    console.log(`[GET Meetings] Successfully fetched and formatted ${formattedMeetings.length} meetings.`);
+    return NextResponse.json({ meetings: formattedMeetings });
+  } catch (error) {
+    console.error("[GET Meetings] Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function POST(req: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { title, description, startTime, endTime, attendees } = await req.json();
+    const body = await req.json();
+    const { title, description, startTime, endTime, attendees } = body;
 
-  const event = await prisma.event.create({
-    data: {
-      title,
-      description,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      creatorId: session.userId,
-    },
-  });
+    console.log("[POST Meetings] Form submission data received:", { title, description, startTime, endTime, attendees });
 
-  if (attendees && attendees.length > 0) {
-    await prisma.eventAttendee.createMany({
-      data: attendees.map((userId: string) => ({
-        eventId: event.id,
-        userId,
-      })),
+    if (!title || !startTime || !endTime) {
+      console.warn("[POST Meetings] Missing required fields:", { title, startTime, endTime });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Find matching user IDs for input attendees names/emails
+    let attendeeIds: string[] = [userId];
+    if (attendees && attendees.length > 0) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { name: { in: attendees, mode: "insensitive" } },
+            { email: { in: attendees, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      attendeeIds = Array.from(new Set([userId, ...matchedUsers.map(u => u.id)]));
+    }
+    console.log("[POST Meetings] Resolved attendee IDs:", attendeeIds);
+
+    const event = await prisma.event.create({
+      data: {
+        title,
+        description,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        creatorId: userId,
+        attendees: {
+          createMany: {
+            data: attendeeIds.map((uid) => ({
+              userId: uid,
+              status: uid === userId ? "ACCEPTED" : "PENDING",
+            })),
+          },
+        },
+      },
+      include: {
+        creator: { select: { id: true, name: true } },
+        attendees: { include: { user: { select: { id: true, name: true } } } },
+      },
     });
+
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const start = new Date(event.startTime);
+    const end = new Date(event.endTime);
+    const dateStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+    const startTimeStr = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+    const endTimeStr = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+
+    const formattedMeeting = {
+      id: event.id,
+      title: event.title,
+      organizer: event.creator?.name || "Unknown",
+      date: dateStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      description: event.description || "",
+      attendees: event.attendees.map((att) => att.user.name),
+    };
+
+    console.log("[POST Meetings] Successfully created meeting event:", formattedMeeting.id);
+    return NextResponse.json({ success: true, event: formattedMeeting });
+  } catch (error) {
+    console.error("[POST Meetings] Error saving event:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
-
-  await prisma.activityEvent.create({
-    data: {
-      type: "MEETING_CREATED",
-      metadata: { eventId: event.id, title: event.title },
-      userId: session.userId,
-    },
-  });
-
-  await cacheDel(`user:${session.userId}:meetings`);
-  return NextResponse.json({ event }, { status: 201 });
 }

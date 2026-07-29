@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "livekit": "livekit-server\\livekit-server.exe --dev --config livekit.yaml",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -14,6 +15,8 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.23",
+    "@livekit/components-styles": "^1.2.0",
     "@prisma/client": "^6.0.0",
     "@radix-ui/react-avatar": "^1.1.0",
     "@radix-ui/react-dialog": "^1.1.0",

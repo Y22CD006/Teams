@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
+  const { userId: authUserId } = await auth();
+  const userId = authUserId as string;
+  const session = userId ? { userId } : null;
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -32,5 +34,17 @@ export async function GET(req: NextRequest) {
     take: 20,
   });
 
-  return NextResponse.json({ users });
+  const mapped = users.map((u) => {
+    let displayName = u.name;
+    if (!displayName || displayName === u.id) {
+      displayName = u.username || u.email?.split("@")[0] || u.id;
+    }
+    return {
+      ...u,
+      name: displayName,
+    };
+  });
+
+  return NextResponse.json({ users: mapped });
 }
+

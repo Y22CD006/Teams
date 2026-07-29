@@ -86,9 +86,7 @@ export interface CalendarMeeting {
   description: string;
   attendees: string[];
   isLive?: boolean;
-  roomName?: string;
-  token?: string;
-  serverUrl?: string;
+  isVideo?: boolean;
 }
 
 export type CalendarViewType = 'month' | 'week' | 'day';
@@ -116,10 +114,11 @@ export function isTask(item: CalendarItem): item is CalendarTask {
 export interface FileItem {
   id: string;
   name: string;
-  type: 'pdf' | 'doc' | 'xls' | 'ppt' | 'image' | 'zip' | 'code';
+  type: 'pdf' | 'doc' | 'xls' | 'ppt' | 'image' | 'zip' | 'code' | 'other';
   size: string;
   uploadedBy: string;
   uploadedAt: string;
+  lastModified?: string;
   teamId?: string;
   channelId?: string;
 }

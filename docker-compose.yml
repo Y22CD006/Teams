@@ -1,27 +1,56 @@
+version: '3.8'
+
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL and REDIS_URL to use the docker containers
+      - DATABASE_URL=postgresql://teams_user:teams_password@postgres:5432/teams_db?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - teams_network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=teams_user
+      - POSTGRES_PASSWORD=teams_password
+      - POSTGRES_DB=teams_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teams_user -d teams_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - teams_network
+
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  livekit:
-    image: livekit/livekit-server:latest
-    network_mode: host
-    command: --config /etc/livekit/livekit.yaml
-    volumes:
-      - ./livekit.yaml:/etc/livekit/livekit.yaml
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      - redis_data:/data
+    networks:
+      - teams_network
 
 volumes:
-  redis-data:
+  postgres_data:
+  redis_data:
+
+networks:
+  teams_network:

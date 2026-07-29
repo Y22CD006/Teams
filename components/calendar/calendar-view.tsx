@@ -158,8 +158,13 @@ export const CalendarView = ({
 
         {monthDays.map((cell) => {
           const isSel = selectedDateStr === cell.dateStr;
-          const totalItems = cell.meetings.length + cell.tasks.length;
-          const maxVisible = 2;
+          const dayMeetings = meetingsForDate(meetings, cell.dateStr);
+          const dayTasks = tasksForDate(tasks, cell.dateStr);
+          const allItems = [
+            ...dayMeetings.map(m => ({ ...m, type: 'meeting' as const })),
+            ...dayTasks.map(t => ({ ...t, type: 'task' as const })),
+          ];
+          
           return (
             <div
               key={cell.day}
@@ -181,42 +186,31 @@ export const CalendarView = ({
               }`}>
                 {cell.day}
               </span>
-
-              {totalItems > 0 && (
-                <div className="flex-1 space-y-0.5 overflow-hidden">
-                  {cell.tasks.slice(0, maxVisible).map((t) => (
-                    <div
-                      key={t.id}
-                      className="text-[7px] px-1 py-0.5 rounded leading-tight truncate font-medium bg-amber-500/15 text-amber-400 border-l-2 border-amber-500"
-                      title={`${t.title}${t.time ? ` @ ${t.time}` : ''} (${t.priority})`}
-                    >
-                      {t.time && <span className="text-[6px] opacity-70 mr-0.5">{t.time}</span>}
-                      {t.title}
-                    </div>
-                  ))}
-                  {cell.tasks.length > 0 && cell.meetings.length > 0 && (
-                    <div className="h-px bg-[var(--border-color)] mx-1" />
-                  )}
-                  {cell.meetings.slice(0, Math.max(0, maxVisible - cell.tasks.length)).map((m) => (
-                    <div
-                      key={m.id}
-                      className={`text-[7px] px-1 py-0.5 rounded leading-tight truncate font-medium ${
-                        m.isLive
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
-                      }`}
-                      title={`${m.title} ${m.startTime}-${m.endTime}`}
-                    >
-                      {m.title}
-                    </div>
-                  ))}
-                  {totalItems > maxVisible && (
-                    <div className="text-[6px] text-gray-500 font-medium px-1">
-                      +{totalItems - maxVisible} more
-                    </div>
-                  )}
-                </div>
-              )}
+              
+              <div className="flex-1 overflow-y-auto mt-1 space-y-1 scrollbar-none">
+                {allItems.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className={`text-[9px] px-1.5 py-0.5 rounded border truncate font-semibold leading-none ${
+                      item.type === 'meeting'
+                        ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                        : item.priority === 'HIGH'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : item.priority === 'MEDIUM'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    }`}
+                    title={`${item.type === 'meeting' ? 'Meeting' : 'Task'}: ${item.title}`}
+                  >
+                    {item.title}
+                  </div>
+                ))}
+                {allItems.length > 3 && (
+                  <div className="text-[8px] text-gray-500 font-bold pl-1">
+                    +{allItems.length - 3} more
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -308,23 +302,44 @@ export const CalendarView = ({
                 </div>
                 {weekDays.map((_, dayIdx) => {
                   const ds = weekDateStrs[dayIdx];
-                  const dayMeetings = meetingsForDateAndHour(meetings, ds, parseInt(hour.split(':')[0], 10));
+                  const hourMeetings = meetingsForDate(meetings, ds).filter((m) => {
+                    const startHour = m.startTime.split(":")[0];
+                    const slotHour = hour.split(":")[0];
+                    return startHour === slotHour;
+                  });
+                  const hourTasks = tasksForDate(tasks, ds).filter((t) => {
+                    if (!t.time) return false;
+                    const dueHour = t.time.split(":")[0];
+                    const slotHour = hour.split(":")[0];
+                    return dueHour === slotHour;
+                  });
+                  
+                  const allHourItems = [
+                    ...hourMeetings.map(m => ({ ...m, type: 'meeting' as const })),
+                    ...hourTasks.map(t => ({ ...t, type: 'task' as const })),
+                  ];
+
                   return (
                     <div
                       key={`${hour}-${dayIdx}`}
                       onClick={() => handleDayClick(ds)}
-                      className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors"
+                      className="bg-[var(--bg-primary)] p-1 min-h-[40px] border-b border-[var(--border-color)] cursor-pointer hover:bg-[var(--bg-tertiary)]/20 transition-colors relative flex flex-col gap-0.5"
                     >
-                      {dayMeetings.map((m) => (
+                      {allHourItems.map((item) => (
                         <div
-                          key={m.id}
-                          className={`text-[8px] px-1 py-0.5 rounded mb-0.5 truncate font-medium ${
-                            m.isLive
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-indigo-500/10 text-indigo-300'
+                          key={item.id}
+                          className={`text-[9px] px-1.5 py-0.5 rounded border truncate font-semibold leading-none ${
+                            item.type === 'meeting'
+                              ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                              : item.priority === 'HIGH'
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : item.priority === 'MEDIUM'
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
                           }`}
+                          title={`${item.type === 'meeting' ? 'Meeting' : 'Task'}: ${item.title}`}
                         >
-                          {m.title}
+                          {item.title}
                         </div>
                       ))}
                     </div>
@@ -343,37 +358,46 @@ export const CalendarView = ({
     const dayTasks = tasksForDate(tasks, selectedDateStr);
     return (
       <div className="flex-1 overflow-y-auto">
-        {dayTasks.length > 0 && (
-          <div className="border-b border-amber-500/20 bg-amber-500/[0.02] px-4 py-2 space-y-1">
-            <p className="text-[10px] font-bold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> Tasks
-            </p>
-            {dayTasks.map((t) => (
-              <div key={t.id} className="flex items-center gap-2 text-xs bg-amber-500/10 border-l-2 border-amber-500 rounded px-3 py-1.5">
-                {t.time && <span className="text-[10px] text-amber-400 font-mono flex-shrink-0">{t.time}</span>}
-                <span className="text-[var(--text-primary)] font-medium">{t.title}</span>
-                <span className={`text-[9px] font-bold ml-auto ${t.priority === 'HIGH' ? 'text-rose-400' : t.priority === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'}`}>{t.priority}</span>
-              </div>
-            ))}
-          </div>
-        )}
         <div className="divide-y divide-[var(--border-color)]">
           {dayHours.map((hour) => {
-            const hourNum = parseInt(hour.split(':')[0], 10);
-            const hourMeetings = dayMeetings.filter((m) => parseInt(m.startTime.split(':')[0], 10) === hourNum);
+            const hourMeetings = meetingsForDate(meetings, selectedDateStr).filter((m) => {
+              const startHour = m.startTime.split(":")[0];
+              const slotHour = hour.split(":")[0];
+              return startHour === slotHour;
+            });
+            const hourTasks = tasksForDate(tasks, selectedDateStr).filter((t) => {
+              if (!t.time) return false;
+              const dueHour = t.time.split(":")[0];
+              const slotHour = hour.split(":")[0];
+              return dueHour === slotHour;
+            });
+
             return (
               <div key={hour} className="flex min-h-[48px] group hover:bg-[var(--bg-tertiary)]/20 transition-colors">
                 <div className="w-16 flex-shrink-0 p-2 text-[9px] text-gray-500 font-mono text-right border-r border-[var(--border-color)]">
                   {hour}
                 </div>
-                <div className="flex-1 p-1 space-y-0.5">
+                <div className="flex-1 p-2 flex flex-col gap-1">
                   {hourMeetings.map((m) => (
-                    <div key={m.id} className={`text-xs p-2 rounded-lg border ${m.isLive ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-indigo-500/5 border-indigo-500/20 text-indigo-300'}`}>
-                      <div className="font-semibold text-[var(--text-primary)]">{m.title}</div>
-                      <div className="text-[10px] text-[var(--text-secondary)] flex items-center gap-2 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        <span>{m.startTime} - {m.endTime}</span>
-                      </div>
+                    <div
+                      key={m.id}
+                      className="text-xs px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 max-w-lg font-semibold flex items-center justify-between"
+                    >
+                      <span>Meeting: {m.title}</span>
+                      <span className="text-[10px] text-indigo-400 font-mono font-medium">{m.startTime} - {m.endTime}</span>
+                    </div>
+                  ))}
+                  {hourTasks.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`text-xs px-3 py-1.5 rounded-xl max-w-lg font-semibold flex items-center justify-between border ${
+                        t.priority === 'HIGH' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                        t.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                        'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                      }`}
+                    >
+                      <span>Task: {t.title}</span>
+                      <span className="text-[10px] opacity-80 font-mono font-medium">Due at {t.time || "12:00"}</span>
                     </div>
                   ))}
                 </div>
