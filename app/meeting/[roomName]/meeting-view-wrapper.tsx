@@ -1,6 +1,6 @@
 "use client";
 
-import { MeetingView } from "@/components/meetings/meeting-view";
+import MeetingRoom from "@/components/meeting/MeetingRoom";
 import type { User } from "@/lib/types";
 
 interface MeetingViewWrapperProps {
@@ -12,14 +12,11 @@ interface MeetingViewWrapperProps {
 
 export function MeetingViewWrapper({ user, roomName, token, serverUrl }: MeetingViewWrapperProps) {
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#090D16]">
-      <MeetingView
-        currentUser={user}
-        meetingTitle={`Meeting: ${roomName}`}
-        roomName={roomName}
+    <div className="h-screen w-screen overflow-hidden bg-slate-950">
+      <MeetingRoom
         token={token}
         serverUrl={serverUrl}
-        onLeave={() => window.location.href = "/"}
+        meetingId={roomName}
       />
     </div>
   );
